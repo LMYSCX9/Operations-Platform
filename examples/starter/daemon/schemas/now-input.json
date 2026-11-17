@@ -1,0 +1,9 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "starter-daemon.now 输入",
+  "type": "object",
+  "properties": {
+    "format": { "enum": ["rfc3339", "unix"] }
+  },
+  "additionalProperties": true
+}

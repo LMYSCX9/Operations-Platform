@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "starter-command.greet 输入",
+  "type": "object",
+  "required": ["name"],
+  "properties": {
+    "name": { "type": "string", "minLength": 1 },
+    "greeting": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": true
+}

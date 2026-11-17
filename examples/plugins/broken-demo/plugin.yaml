@@ -1,0 +1,22 @@
+identity:
+  id: broken_demo
+  display_name: 反例插件
+  description: 故意违反契约的插件，用于验证发现阶段的拒绝路径
+version:
+  plugin: 1.0.0
+  contract: ">=2.0"
+form: command
+entry:
+  executable: bin/does-not-exist
+capabilities:
+  - id: echo
+    description: 能力标识缺少插件前缀
+    input_schema_ref: schemas/missing.json
+    output_schema_ref: schemas/missing.json
+    idempotent: true
+    long_running: false
+    supports_cancel: false
+    concurrency: parallel
+    sensitive: false
+dependencies:
+  - demo-echo

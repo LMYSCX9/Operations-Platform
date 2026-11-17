@@ -1,0 +1,34 @@
+identity:
+  id: starter-daemon
+  display_name: 常驻插件起步模板
+  description: 最小可运行常驻插件（远端 daemon 形态）；整目录复制后改名并实现你的能力，验证 mTLS 下发与调用链路
+version:
+  plugin: 0.1.0
+  contract: ">=1.2 <2.0"
+form: daemon
+entry:
+  launch: bin/starter-daemon
+  socket: starter-daemon.sock   # 本机专用建议值；实际路径由底座经 --ops-socket 传入
+runtime:
+  listen:
+    port: 29444                 # 远端默认端口基线（示例值，待 OQ-048 定稿端口范围）；生效值以按主机配置为准
+config:
+  - key: label
+    type: string
+    required: false
+    default: starter-daemon
+    description: now 能力输出中携带的实例标签，用于验证实例配置按主机下发
+capabilities:
+  - id: starter-daemon.now
+    description: 返回当前时间与实例配置的 label；演示 gRPC Invoke、串行调度、结构化错误与配置作用域
+    input_schema_ref: schemas/now-input.json
+    output_schema_ref: schemas/now-output.json
+    idempotent: true
+    long_running: false
+    supports_cancel: false
+    concurrency: serial
+    sensitive: false
+metadata:
+  author: your-team
+  license: Apache-2.0
+  docs: .

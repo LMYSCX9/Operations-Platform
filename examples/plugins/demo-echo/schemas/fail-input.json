@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "demo-echo.fail 输入",
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string",
+      "enum": [
+        "input_invalid",
+        "capability_unknown",
+        "permission_denied",
+        "timeout",
+        "result_too_large",
+        "dependency_unavailable",
+        "internal_error",
+        "protocol_invalid"
+      ]
+    },
+    "message": { "type": "string" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,74 @@
+# 插件清单模板
+# 文件名必须为 plugin.yaml，放在插件包根目录，UTF-8 编码。
+# 字段定义与校验规则见 01-manifest.md（唯一权威副本）。
+# 不要在本文件中写入任何密钥、口令、令牌。
+
+identity:
+  id: example-plugin          # 必需。小写短横线，正则 ^[a-z][a-z0-9-]*$，全局唯一
+  display_name: 示例插件       # 必需。人类可读名称
+  description: 说明这个插件做什么、不做什么  # 必需
+
+version:
+  plugin: 0.1.0               # 必需。插件自身版本 MAJOR.MINOR.PATCH
+  contract: ">=1.0 <2.0"      # 必需。支持的契约版本范围，空格分隔，操作符 >= < =；
+                              # 用 1.1 新错误类别时下限改 >=1.1；声明远端部署或 config[] 时下限改 >=1.2
+
+form: command                 # 必需。command（命令式）或 daemon（常驻）
+                              # daemon 实现状态：本机托管尚未实现（OQ-044），本机请用 command；
+                              # 远端 daemon 只能经底座下发运行，不支持手工部署或注册 systemd unit
+
+entry:
+  executable: bin/example-plugin   # form=command 时必需。包内相对路径
+  # launch: bin/example-agent     # form=daemon 时必需。包内相对路径；远端由底座下发的 systemd unit 拉起
+  # socket: example-agent.sock    # form=daemon 可选，本机专用（本机托管尚未实现）。仅文件名建议值；实际路径由底座经 --ops-socket 传入
+
+capabilities:
+  - id: example-plugin.echo             # 必需。<插件标识>.<能力名>；禁止末段为 setup/version
+    description: 原样返回输入；无副作用   # 必需
+    input_schema_ref: schemas/echo.input.json    # 必需。包内相对路径
+    output_schema_ref: schemas/echo.output.json  # 必需。包内相对路径
+    idempotent: true                    # 必需
+    long_running: false                 # 必需
+    suggested_timeout_ms: 3000          # 可选。底座可覆盖
+    supports_cancel: false              # 必需
+    concurrency: parallel               # 必需。声明插件自身承受能力；底座一律串行调度
+    sensitive: false                    # 必需。输入/输出是否可能含敏感信息
+    risk_level: normal                  # 可选。normal（默认）/ destructive
+                                        # 能力名末段为 delete/restore/gc 时必须为 destructive，
+                                        # 且输入 schema 必须把确认字段列为 required（见 01-manifest.md §3.5）
+
+permissions:                    # 可选。无权限需求时整段省略
+  - category: data_dir          # config / data_dir / network / filesystem / credential / invoke_plugin
+    actions: [read, write]      # 与类别语义匹配的动作
+    # scope: ""                 # 可选。路径/域名范围；是否强制校验待定（OQ-037）
+
+runtime:                        # 可选
+  max_result_bytes: 1048576     # 插件可产出的最大结果体积；底座侧上限待定（OQ-017）
+  resource_expectation: 单核、内存低于 50 MiB
+  # listen:                     # 仅 form=daemon。声明即表示可被远端部署；不声明则只能本机部署
+  #   port: 29443               # 远端默认端口；下发到具体主机可覆盖；范围与默认值待 OQ-048；
+  #                             # 当前只能经底座下发，本机 daemon 托管尚未实现（OQ-044）
+
+# config:                       # 可选。可配置项声明；值由底座按实例收集、校验、加密并写入配置文件
+#   - key: log_path             # ^[a-z][a-z0-9_]*$，类型内唯一
+#     type: string              # string / number / integer / boolean / enum
+#     required: true
+#     description: 目标机上的日志目录
+#   - key: api_token
+#     type: string
+#     required: true
+#     secret: true              # 敏感：底座加密存储、接口只回掩码；禁止 default；不得出现在日志
+#     description: 上游访问令牌
+#   - key: mode
+#     type: enum
+#     enum: [fast, safe]        # 仅 type=enum 使用
+#     default: safe
+
+metadata:                       # 可选。不参与运行决策
+  author: ""
+  license: ""
+  homepage: ""
+  docs: README.md
+
+# 禁止字段：dependencies（v1 不支持插件间依赖）
+# 禁止字段：任何凭据、密钥、口令、令牌

@@ -1,0 +1,423 @@
+# .ai/open-questions.yaml
+# 机器可读开放问题清单。事实来源：docs/07-open-questions.md（两者必须同步）。
+# priority: P0=阻塞契约/阻塞开发；P1=影响架构但可并行；P2=可延后
+# status: open | decided | deferred | rejected
+schema_version: 1
+questions:
+  - id: OQ-001
+    title: 常驻插件的远程调用协议与传输方式
+    priority: P0
+    adr: ADR-0005
+    blocks: [DOC-03, plugin-spec/03-remote-protocol.md]
+    status: decided
+    decision: gRPC over 本机 Unix Domain Socket，只暴露通用 Invoke（按能力标识路由），不预生成强类型方法；远程 TCP/mTLS 记 idea，与 OQ-010 绑定；已批准引入 gRPC/protobuf 工具链（ADR-0005 accepted）
+
+  - id: OQ-002
+    title: 插件发现与注册机制
+    priority: P0
+    adr: ADR-0003
+    blocks: [DOC-03, DOC-04]
+    status: decided
+    decision: 目录扫描 + 清单校验 + 注册表持久化（SQLite）；热加载为可选开关、默认关闭；安装后默认禁用，需显式启用（ADR-0003 accepted）
+
+  - id: OQ-003
+    title: 插件鉴权与授权模型
+    priority: P0
+    adr: ADR-0006
+    blocks: [DOC-02, DOC-03, DOC-06]
+    status: decided
+    decision: 宿主签发短期凭据 + 能力级授权 + 默认拒绝；权限声明采用「资源类别 + 动作」语义；审计记录授权结果（ADR-0006 accepted）；人类身份源等拆分至 OQ-037
+
+  - id: OQ-004
+    title: 命令式插件 stdio 通信的编码与帧格式
+    priority: P0
+    adr: ADR-0004
+    blocks: [plugin-spec/02-stdio-protocol.md]
+    status: decided
+    decision: NDJSON（一行一条 JSON，UTF-8）；stdin 关闭即输入结束；stdout 只放结果、stderr 只放日志；超限必须返回 result_too_large（数值上限见 OQ-017）；退出码与错误类别一致（ADR-0004 accepted）
+
+  - id: OQ-005
+    title: 插件清单字段集与 schema 校验方式
+    priority: P0
+    adr: ADR-0003
+    blocks: [plugin-spec/01-manifest.md]
+    status: decided
+    decision: 最小必需字段 + 内置 JSON Schema 校验；格式 YAML，文件名 plugin.yaml；标识小写短横线；能力标识强制 <插件标识>.<能力名>；v1 禁止插件间依赖（ADR-0003 accepted）
+
+  - id: OQ-006
+    title: 契约版本号规则与兼容矩阵
+    priority: P0
+    adr: ADR-0012
+    blocks: [DOC-05]
+    status: decided
+    decision: 契约版本 MAJOR.MINOR；插件声明支持的版本范围（>=1.0 <2.0）；底座同时支持同一 MAJOR 下多个 MINOR；安装/启用时完成兼容判定（ADR-0012 版本规则已定稿）；废弃周期等细节见 OQ-038
+
+  - id: OQ-007
+    title: 是否需要内置持久化存储及方案选型
+    priority: P1
+    adr: ADR-0007
+    blocks: [DOC-02, DOC-06]
+    status: decided
+    decision: 采用嵌入式 SQLite（纯 Go 驱动、免 cgo）作为唯一内置存储；插件不直连底座库，只使用独立数据目录（ADR-0007 accepted，规格见 docs/08）
+
+  - id: OQ-008
+    title: 配置来源、格式与优先级
+    priority: P1
+    adr: ADR-0009
+    blocks: [DOC-06]
+    status: open
+    recommendation: 文件 + 环境变量 + 命令行，优先级命令行 > 环境变量 > 文件
+
+  - id: OQ-009
+    title: 插件进程隔离与资源限制
+    priority: P1
+    adr: ADR-0010
+    blocks: [DOC-03, DOC-06]
+    status: open
+    recommendation: v1 依赖 OS 进程隔离，不引入容器运行时；资源限制可选启用
+
+  - id: OQ-010
+    title: 常驻插件是否支持跨主机运行与调用（传输层）
+    priority: P1
+    adr: [ADR-0005, ADR-0018, ADR-0022]
+    blocks: [DOC-02, DOC-03, DOC-09]
+    status: decided
+    decision: 支持。本机为 gRPC over UDS（底座 spawn 托管）；远端为 TCP + 双向 TLS（目标机 systemd 托管，底座下发 unit 并探测）。同一主机 + 同一插件只允许一种托管；SSH 仅用于下发安装/启停/探测，不承担调用传输。明文 TCP 与单向 TLS 禁止（ADR-0005 / ADR-0018 / ADR-0022 accepted）
+
+  - id: OQ-011
+    title: 插件界面承载（一档声明式边界；二档自带前端包挂起）
+    priority: P1
+    adr: [ADR-0002, ADR-0025]
+    blocks: [DOC-02, DOC-05, plugin-spec/12-plugin-ui.md]
+    status: open
+    decision: v1 只做一档「声明式界面」——清单声明入口、配置表单与结果展示，底座统一渲染，不加载任何插件前端代码；二档「插件自带前端包」（沙箱 iframe + Host API）挂起为 idea，不进入 v1
+    pending_declarative:
+      - 可用控件集合与各自约束
+      - 结果展示形态清单（表格/键值/纯文本/JSON）与字段顺序
+      - 是否允许自定义展示顺序与分组
+      - 入口与导航声明范围
+      - 是否需要新的契约 MINOR 版本及最低契约版本
+    pending_suspended_single_item: 沙箱技术选型、Host API 最小面、第三方前端审核/签名、是否允许网络请求（合并为一条挂起项，不拆独立 OQ）
+    recommendation: v1 落地一档；二档不承诺未来必然实现，重启评审前需先满足严格隔离、默认拒绝、审核/签名、离线与可审计等门槛（ADR-0025 §2）
+
+  - id: OQ-012
+    title: 健康检查语义、频率与失败判定
+    priority: P1
+    adr: ADR-0010
+    blocks: [DOC-04]
+    status: open
+    recommendation: 失败 N 次进入 unhealthy，调用时短路并记录审计
+
+  - id: OQ-013
+    title: 前端技术栈
+    priority: P2
+    adr: ADR-0002
+    blocks: [DOC-06]
+    status: open
+    recommendation: 优先 TypeScript + 主流组件框架，最终以用户拍板为准
+
+  - id: OQ-014
+    title: 单二进制内嵌前端资源的具体构建方式
+    priority: P2
+    adr: ADR-0001
+    blocks: [DOC-06]
+    status: open
+    recommendation: Go 原生 embed + 构建脚本产出单文件，避免额外运行时依赖
+
+  - id: OQ-015
+    title: 插件分发与签名方式
+    priority: P2
+    adr: ADR-0008
+    blocks: [DOC-04, DOC-06]
+    status: open
+    recommendation: 摘要校验为基线，签名验签作为可选强度等级
+
+  - id: OQ-016
+    title: 可观测性基线内容
+    priority: P2
+    adr: ADR-0011
+    blocks: [DOC-06, plugin-spec/06-logging-observability.md]
+    status: open
+    recommendation: 结构化日志为必需，指标与链路为可选
+
+  - id: OQ-017
+    title: 非功能指标目标值
+    priority: P2
+    adr: null
+    blocks: [DOC-06]
+    status: open
+    recommendation: 待用户给出启动时间、并发调用量、内存占用等量化目标
+
+  - id: OQ-018
+    title: 插件 SDK 的形态与发布方式
+    priority: P2
+    adr: ADR-0012
+    blocks: [plugin-spec]
+    status: open
+    recommendation: 独立 Go module 发布，插件以 import 方式复用契约类型
+
+  - id: OQ-019
+    title: 对外接口层的形态与开放程度
+    priority: P1
+    adr: ADR-0009
+    blocks: [DOC-02, DOC-06]
+    status: open
+    recommendation: v1 仅服务内嵌 UI，开放 API 标记为 idea
+
+  - id: OQ-020
+    title: 单节点部署还是多节点高可用
+    priority: P1
+    adr: ADR-0007
+    blocks: [DOC-06, DOC-08]
+    status: decided
+    decision: 单节点部署；同一数据目录只允许一个实例。多节点高可用归入远期 idea（DOC-00 IDEA-7），不进入 v1 规格
+
+  - id: OQ-021
+    title: 插件凭据的加密方式
+    priority: P1
+    adr: ADR-0013
+    blocks: [DOC-02, DOC-06, DOC-08]
+    status: decided
+    decision: 基础方案——AES-256-GCM 对称加密存库；主密钥来自环境变量（优先）或配置文件独立字段，密钥不落库、不写日志。边界：只防库文件/备份被单独拷走，不防主机被完全控制（ADR-0013 accepted）
+
+  - id: OQ-022
+    title: 配置文件未指定数据目录时的默认回退位置
+    priority: P1
+    adr: ADR-0009
+    blocks: [DOC-06, DOC-08]
+    status: open
+    recommendation: 已定数据目录由配置文件指定、必须绝对路径且不得为网络文件系统；仅默认回退未定，候选为操作系统惯例路径（Linux /var/lib/、Windows C:\ProgramData\）
+
+  - id: OQ-023
+    title: 主密钥轮换与丢失处置
+    priority: P1
+    adr: ADR-0013
+    blocks: [DOC-06, DOC-08]
+    status: open
+    recommendation: 未确认；轮换流程与丢失后重置凭据的方式待定。注意：主密钥丢失等于已存凭据不可恢复
+
+  - id: OQ-024
+    title: 目标主机操作系统范围（是否仅 Linux，是否需要 WinRM）
+    priority: P1
+    adr: [ADR-0014, ADR-0018]
+    blocks: [DOC-02, DOC-06, DOC-09]
+    status: open
+    note: 已部分收窄：远端「启动与调用」限定 Linux + systemd（ADR-0018 §1.2）。仍待裁决的是「仅下发安装」是否支持非 Linux / 非 systemd 目标
+    recommendation: v1 仅 Linux；Windows 支持待用户裁决，未定前不得提前实现 WinRM
+
+  - id: OQ-025
+    title: 主机指纹首次信任与变更确认策略
+    priority: P1
+    adr: ADR-0014
+    blocks: [DOC-06, DOC-09]
+    status: open
+    recommendation: 首次信任并记录（TOFU）+ 指纹变更阻断告警；不校验模式明确排除
+
+  - id: OQ-026
+    title: 下发前签名校验是否强制
+    priority: P1
+    adr: ADR-0014
+    blocks: [DOC-06, DOC-09]
+    status: open
+    recommendation: 摘要必验、签名可选（与 ADR-0008 一并定）
+
+  - id: OQ-027
+    title: 下发是否依赖目标机守护进程
+    priority: P1
+    adr: [ADR-0018, ADR-0022]
+    blocks: [DOC-03, DOC-04, DOC-09]
+    status: decided
+    decision: 不引入自建 Agent。远端常驻插件由目标机 systemd 托管：底座经 SSH 下发 unit 并 enable/start，随后做状态探测；调用不走 SSH、不走 Agent，走 TCP + mTLS。三态（已安装/已启动/可调用）独立记录（ADR-0018 / ADR-0022 accepted）
+
+  - id: OQ-028
+    title: 主机分组与下发授权模型（含二次确认）
+    priority: P1
+    adr: ADR-0014
+    blocks: [DOC-02, DOC-06, DOC-09]
+    status: open
+    recommendation: 按分组授权 + 二次确认 + 全程审计 + 凭据最小化 + 下发与启用分离；需用户拍板
+
+  - id: OQ-029
+    title: 下发并发上限、超时、重试与回滚默认值
+    priority: P2
+    adr: ADR-0014
+    blocks: [DOC-06, DOC-09]
+    status: open
+    note: 跨主机调用的并发/超时/重试已随 OQ-010 关闭，迁至 OQ-048
+    recommendation: 需用户给出量化目标；同一主机下发必须串行是硬约束
+
+  - id: OQ-030
+    title: 定时任务是否可面向目标主机（而非仅本机）
+    priority: P1
+    adr: ADR-0015
+    blocks: [DOC-02, DOC-10]
+    status: open
+    recommendation: v1 默认仅本机调用插件能力；面向目标主机执行/下发未确认，不得默认支持
+
+  - id: OQ-031
+    title: cron 语义是否支持到秒
+    priority: P1
+    adr: ADR-0015
+    blocks: [DOC-06, DOC-10]
+    status: open
+    recommendation: v1 建议标准 5 段（分钟级）；秒级需同时定义精度容差
+
+  - id: OQ-032
+    title: 错过执行是否补跑
+    priority: P1
+    adr: ADR-0015
+    blocks: [DOC-06, DOC-10]
+    status: open
+    recommendation: v1 建议不补跑仅记录；补跑上限与合并规则待定
+
+  - id: OQ-033
+    title: 定时任务失败告警通道
+    priority: P2
+    adr: ADR-0015
+    blocks: [DOC-06, DOC-10]
+    status: open
+    recommendation: 需用户拍板（UI 通知 / 邮件 / Webhook / 外部告警系统），必须有重复抑制
+
+  - id: OQ-034
+    title: 定时任务是否与主机分组/授权模型共用权限体系
+    priority: P1
+    adr: ADR-0015
+    blocks: [DOC-06, DOC-10]
+    status: open
+    recommendation: 需用户拍板，与 OQ-028 一并确认
+
+  - id: OQ-035
+    title: v1 是否允许任务高频执行及最小间隔
+    priority: P2
+    adr: ADR-0015
+    blocks: [DOC-06, DOC-10]
+    status: open
+    recommendation: 需用户给出量化目标；最小间隔、全局并发、超时、重试、关闭等待时长一并确定
+
+  - id: OQ-036
+    title: M0 实现基线中的配置键名、环境变量、HTTP 路径、库文件名与默认值
+    priority: P1
+    adr: ADR-0009
+    blocks: [DOC-06, DOC-11]
+    status: open
+    recommendation: 接受 DOC-11 §11 已落地的可运行基线，或指出需调整项；JSON 配置文件、OPS_PLATFORM_ 前缀、/healthz 与 /api/version、platform.db、10s 关闭超时均属待确认项
+
+  - id: OQ-037
+    title: 人类用户身份源、角色划分与 scope 强制校验
+    priority: P1
+    adr: ADR-0006
+    blocks: [DOC-03, DOC-06]
+    status: open
+    recommendation: 由 OQ-003 拆出；v1 至少要求「已认证主体」，登录方式（本地账号 / OIDC / LDAP）与角色模型需用户拍板；scope 是否强制校验一并确认
+
+  - id: OQ-038
+    title: 契约细节遗留：字段命名风格、废弃支持周期、分页约定、错误堆栈
+    priority: P2
+    adr: ADR-0012
+    blocks: [DOC-05, plugin-spec/04-io-conventions.md, plugin-spec/05-errors-and-exit-codes.md]
+    status: open
+    recommendation: 由 OQ-004 / OQ-006 拆出；当前默认：不返回错误堆栈、不强制统一分页、同一插件内命名风格自洽；废弃支持周期需给出明确周期
+
+  - id: OQ-039
+    title: M1 插件运行时的配置键、默认值与 HTTP 路径
+    priority: P1
+    adr: [ADR-0009, ADR-0016]
+    blocks: [DOC-06, DOC-12]
+    status: open
+    recommendation: 实现基线，可回改。配置改为 YAML；插件调用超时 30s、结果上限 8 MiB、并发 20、批写 50 条/200ms、热加载默认关闭且扫描 30s；/api/plugins 与 /api/executions 路径族见 DOC-12 §6
+
+  - id: OQ-040
+    title: M2 本地账号口令派生参数、会话 TTL 与登录限速
+    priority: P1
+    adr: [ADR-0006, ADR-0017]
+    blocks: [DOC-06, DOC-13]
+    status: open
+    recommendation: 实现基线，可回改。PBKDF2-HMAC-SHA256 210000 次 / 16 字节盐 / 32 字节输出；会话 TTL 12h；同一账号 5 次失败后锁定 5 分钟；角色固定为 admin/operator/viewer
+
+  - id: OQ-041
+    title: M3 主机下发默认值（并发、超时、远端根目录、指纹策略）
+    priority: P1
+    adr: [ADR-0014, ADR-0017]
+    blocks: [DOC-06, DOC-09, DOC-14]
+    status: open
+    recommendation: 实现基线，可回改。分发并发 4；SSH 连接 10s、上传 5m；远端根目录 /opt/ops-platform/plugins；TOFU 首次锁存、指纹变更阻断；凭据主密钥必填、缺失即显式失败
+
+  - id: OQ-042
+    title: M4 定时任务默认值（超时、重试、最小间隔、重叠策略）
+    priority: P1
+    adr: [ADR-0015]
+    blocks: [DOC-06, DOC-10, DOC-15]
+    status: open
+    recommendation: 实现基线，可回改。单次超时 5m、失败重试 1 次、最小间隔 1m、同任务重叠固定 skip、扫描周期 30s；cron 为 5 段分钟级
+
+  - id: OQ-043
+    title: M5 总览接口的统计口径
+    priority: P2
+    adr: ADR-0002
+    blocks: [DOC-06, DOC-16]
+    status: open
+    recommendation: 实现基线，可回改。GET /api/overview 返回插件（总/启用/禁用）、主机（总/可达）、已下发（installed）、任务（总/启用/暂停/不可用/近 7 天 missed）、近 24 小时执行（总/成功/失败）；不返回无法真实统计的指标，界面不以占位数值替代
+
+  - id: OQ-044
+    title: M6 常驻插件运行时的默认数值（启动超时、就绪轮询、drain/grace、重启退避与上限、凭据有效期、日志行截断、Windows 支持）
+    priority: P1
+    adr: ADR-0018
+    blocks: [DOC-03, DOC-04, DOC-06, plugin-spec/03-remote-protocol.md, plugin-spec/10-faq.md]
+    status: open
+    recommendation: 契约形状已定（进程托管、注入参数、凭据载体、socket 位置与权限、就绪/关闭/重启顺序，见 ADR-0018）；仅具体数值待定，建议给出保守默认值并全部可配置，不得在规范中编造数值
+
+  - id: OQ-045
+    title: protoc / protoc-gen 版本锁定与生成物校验方式
+    priority: P2
+    adr: ADR-0020、ADR-0024
+    blocks: [plugin-spec/03-remote-protocol.md, plugin-spec/10-faq.md]
+    status: decided
+    decision: protoc 36.2.0（npm 包 protoc@36.2.0，经 npx 调用）、protoc-gen-go v1.36.6、protoc-gen-go-grpc v1.5.1 三件套锁定在 scripts/gen-proto.ps1/.sh；CLI 输出 libprotoc 36.2 而生成头记录内部版本 v7.36.2，同一发布版属预期；脚本校验版本、不符即失败；升级三件套同步（ADR-0024 §3），生成物幂等（无契约变更时字节一致）
+
+  - id: OQ-046
+    title: 执行记录是否保留输入/输出摘要、摘要上限与脱敏策略
+    priority: P2
+    adr: []
+    blocks: [DOC-12, DOC-16]
+    status: open
+    recommendation: 实现基线，可回改。plugin_executions 新增 input_summary / output_summary，各截断至 2048 字节并标注截断；完整输入输出不落库；脱敏规则待定，暂沿用 execution.read 权限
+
+  - id: OQ-047
+    title: 证书算法与密钥长度、有效期、轮换周期与提前量、CA 私钥保护与备份
+    priority: P1
+    adr: ADR-0022
+    blocks: [DOC-03, DOC-06, DOC-09, plugin-spec/03-remote-protocol.md, plugin-spec/08-directory-layout.md]
+    status: open
+    recommendation: 形状已定（内置 CA、签发时机、CN/SAN 绑定、EKU、吊销名单、私钥权限，见 ADR-0022）；M6 实现基线为 ECDSA P-256、CA 10 年、叶子 365 天、剩余不足 10% 提示重签（pki_ca_validity / pki_leaf_validity 可配置，见 DOC-18）；轮换周期、CA 备份与算法切换未定
+
+  - id: OQ-048
+    title: systemd unit 细节、远端启停与探测超时、端口默认值与范围、journal 读取方式
+    priority: P1
+    adr: [ADR-0018, ADR-0022]
+    blocks: [DOC-06, DOC-09, plugin-spec/01-manifest.md, plugin-spec/03-remote-protocol.md]
+    status: open
+    recommendation: 形状已定（Type=simple、Restart=on-failure、unit 由底座下发、端口默认值来自清单 declaration 且可按主机覆盖）；M6 实现基线为连接 5s、Ready 3s、启动 60s、unit 指令见 DOC-18，均可配置；端口范围、journal 读取与最小权限账号未定
+
+  - id: OQ-049
+    title: 远端探测间隔、状态过期 TTL、失败降级阈值、探测/执行记录保留
+    priority: P2
+    adr: ADR-0023
+    blocks: [DOC-17, plugin-spec/11-instance-and-config.md]
+    status: open
+    recommendation: 形状已定（三层状态、TTL 到期降 unknown、漂移隔离，见 DOC-17 §5）；M6 实现基线为探测间隔 1m、状态 TTL 5m（plugin_probe_interval / plugin_state_ttl 可配置）；降级阈值与记录保留未定
+
+  - id: OQ-050
+    title: 实例级与类型级授权粒度、类型模板与实例例外优先级、批量授权范围
+    priority: P1
+    adr: [ADR-0006, ADR-0023]
+    blocks: [DOC-03, DOC-17]
+    status: open
+    recommendation: 初步结论为「判定落到实例，类型级只作模板，不支持仅按类型放行」；M6 已按实例判定实现（DOC-18 §7）；模板与例外的优先级、批量授权范围待用户确认
+
+  - id: OQ-051
+    title: 升级时配置迁移、撤销后配置/数据保留期、类型变更处理
+    priority: P2
+    adr: ADR-0023
+    blocks: [DOC-04, DOC-09, DOC-17]
+    status: open
+    recommendation: 建议默认保留配置、类型/枚举变更显式报错并要求迁移；M6 实现基线为撤销保留数据目录、删除配置与证书，升级保留配置（DOC-18 §6.3）；撤销后配置与数据保留期未定

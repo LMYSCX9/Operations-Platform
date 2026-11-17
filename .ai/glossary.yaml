@@ -1,0 +1,147 @@
+# .ai/glossary.yaml
+# 机器可读术语表。事实来源：docs/01-glossary.md（两者必须同步）。
+schema_version: 1
+terms:
+  - term: 底座
+    en: Foundation
+    definition: 本项目的本体，提供插件管理、统一调用、配置、审计、可观测性等基础设施能力，不含具体运维业务功能。
+    forbidden_aliases: [内核, 核心引擎, 框架本身, platform-core]
+    first_doc: DOC-00
+
+  - term: 宿主
+    en: Host
+    definition: 以单二进制形式运行的底座进程，负责加载/调用/监管插件。
+    forbidden_aliases: [主程序, server, agent]
+    first_doc: DOC-00
+
+  - term: 插件
+    en: Plugin
+    definition: 向底座注册并提供能力的独立交付单元，分为命令式插件与常驻插件两种形态。
+    forbidden_aliases: [扩展, 模块, 组件, addon, 子应用]
+    first_doc: DOC-00
+
+  - term: 命令式插件
+    en: Command Plugin
+    definition: 按次调用、进程随调用创建并退出的插件形态，通过标准输入输出与宿主通信。
+    forbidden_aliases: [CLI 插件, 脚本插件, 一次性插件]
+    first_doc: DOC-03
+
+  - term: 常驻插件
+    en: Daemon Plugin
+    definition: 长期驻留、按远程调用方式提供能力的插件形态。
+    forbidden_aliases: [服务插件, 后台插件, service plugin]
+    first_doc: DOC-03
+
+  - term: 插件清单
+    en: Manifest
+    definition: 描述插件身份、版本、形态、能力与所需权限的声明文件，是底座校验插件的入口。
+    forbidden_aliases: [插件配置, plugin.yml, 描述文件]
+    first_doc: DOC-03
+
+  - term: 能力
+    en: Capability
+    definition: 插件对外声明并可被宿主调用的最小功能单元，具备稳定标识与输入输出约定。
+    forbidden_aliases: [接口, function, 动作, action]
+    first_doc: DOC-03
+
+  - term: 扩展点
+    en: Extension Point
+    definition: 底座预留的、允许插件接入的契约位置，具有稳定性等级与版本。
+    forbidden_aliases: [钩子, hook, 插槽]
+    first_doc: DOC-05
+
+  - term: 调用
+    en: Invocation
+    definition: 宿主针对某个插件能力发起的一次请求-响应过程。
+    forbidden_aliases: [请求, 执行任务, 作业]
+    first_doc: DOC-03
+
+  - term: 运行实例
+    en: Runtime Instance
+    definition: 某个插件在宿主上的一个实际运行状态载体；命令式插件每次调用一个实例，常驻插件通常长期一个实例。
+    forbidden_aliases: [进程, worker]
+    first_doc: DOC-04
+
+  - term: 插件注册表
+    en: Registry
+    definition: 底座内部记录插件身份、版本、状态与能力的权威数据结构。
+    forbidden_aliases: [仓库, 市场, marketplace]
+    first_doc: DOC-04
+
+  - term: 调用网关
+    en: Invocation Gateway
+    definition: 底座内统一接收调用请求、完成鉴权、路由、超时与错误归一的组件。
+    forbidden_aliases: [代理, proxy, 路由器]
+    first_doc: DOC-02
+
+  - term: 契约版本
+    en: Contract Version
+    definition: 底座与插件之间接口规范的版本，独立于插件自身版本，兼容性按主版本判定。
+    forbidden_aliases: [API 版本, 底座版本]
+    first_doc: DOC-05
+
+  - term: 插件版本
+    en: Plugin Version
+    definition: 插件自身功能演进的版本号，由插件维护者负责。
+    forbidden_aliases: [软件版本, 发布版本]
+    first_doc: DOC-05
+
+  - term: 插件包
+    en: Plugin Package
+    definition: 插件分发的最小单位，包含清单、可执行文件或服务描述及附带资源。
+    forbidden_aliases: [安装包, 分发包, artifact]
+    first_doc: DOC-04
+
+  - term: 健康检查
+    en: Health Check
+    definition: 宿主判定插件运行实例是否可用、能否继续接收调用的周期性或按需探测。
+    forbidden_aliases: [心跳, 探活, liveness]
+    first_doc: DOC-04
+
+  - term: 审计事件
+    en: Audit Event
+    definition: 底座记录的可追溯操作事实，至少包含主体、动作、对象、结果、时间。
+    forbidden_aliases: [操作日志, 审计日志]
+    first_doc: DOC-02
+
+  - term: 主机清单
+    en: Host Inventory
+    definition: 为插件下发维护的轻量目标主机记录集合，只含连接、认证与分组所需信息，不是资产台账或 CMDB。
+    forbidden_aliases: [资产台账, 主机库, CMDB]
+    first_doc: DOC-09
+
+  - term: 插件下发
+    en: Plugin Distribution
+    definition: 底座经 SSH 把插件包传输、校验并安装到目标主机的动作；不等于启用，也不等于可被远程调用。
+    forbidden_aliases: [推送, 部署, 发布]
+    first_doc: DOC-09
+
+  - term: 主机凭据
+    en: Host Credential
+    definition: 连接目标主机所用的 SSH 私钥或账号密码，必须加密落库，保存后不可回显、不可导出。
+    forbidden_aliases: [登录密码, 密钥文件, 私钥文件]
+    first_doc: DOC-09
+
+  - term: 定时任务
+    en: Scheduled Task
+    definition: 按时间规则调用某个插件的某个能力的底座任务定义；执行经调用网关，不是任意命令执行。
+    forbidden_aliases: [计划任务, 定时作业, 调度任务]
+    first_doc: DOC-10
+
+  - term: 触发规则
+    en: Trigger Rule
+    definition: 定时任务的时间规则，取值为 cron 表达式或固定间隔之一，并绑定一个时区。
+    forbidden_aliases: [调度规则, 计时规则, 时间表]
+    first_doc: DOC-10
+
+  - term: 错过执行
+    en: Missed Run
+    definition: 因服务停机、任务暂停或长时间阻塞导致某个计划触发时点未被执行的状况；必须记录，补跑策略待定。
+    forbidden_aliases: [漏跑, 跳过的任务, 补偿执行]
+    first_doc: DOC-10
+
+  - term: 待定
+    en: TBD
+    definition: 尚未达成一致的规格内容，必须携带 OQ 编号，禁止用假设值填充。
+    forbidden_aliases: [暂定, TODO, 后续再说]
+    first_doc: DOC-01

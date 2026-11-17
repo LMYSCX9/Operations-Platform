@@ -1,0 +1,73 @@
+// 契约唯一来源（ADR-0020）。
+// 本文件与 plugin-spec/03-remote-protocol.md §5 必须逐字一致。
+// Invoke 相关消息的字段名与编号属契约；其余生命周期消息的非 Invoke 字段属实现基线（OQ-045）。
+syntax = "proto3";
+
+package opsplatform.plugin.v1;
+
+option go_package = "operations-platform/sdk/plugin/v1;pluginv1";
+
+service PluginService {
+  rpc GetVersion(GetVersionRequest) returns (GetVersionResponse);
+  rpc Ready(ReadyRequest) returns (ReadyResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+  rpc Invoke(InvokeRequest) returns (InvokeResponse);
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+}
+
+message GetVersionRequest {}
+
+message GetVersionResponse {
+  string plugin_version   = 1;
+  string contract_version = 2;
+}
+
+message ReadyRequest {}
+
+message ReadyResponse {
+  bool   ready  = 1;
+  string reason = 2;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool   healthy = 1;
+  string reason  = 2;
+}
+
+message InvokeRequest {
+  string contract_version = 1;  // 底座使用的契约版本 MAJOR.MINOR
+  string capability       = 2;  // <插件标识>.<能力名>
+  bytes  input_json       = 3;  // UTF-8 JSON
+  InvocationContext context = 4;
+}
+
+message InvocationContext {
+  string invocation_id = 1;
+  int64  deadline_ms   = 2;
+  string subject       = 3;  // 可能敏感，不得写日志明文
+  string credential    = 4;  // 契约 1.1 新增；远端可省略
+}
+
+message InvokeResponse {
+  string status         = 1;  // "ok" | "error"
+  bytes  output_json    = 2;
+  PluginError error     = 3;
+  string plugin_version = 4;
+}
+
+message PluginError {
+  string code         = 1;
+  string message      = 2;
+  bytes  details_json = 3;
+  bool   retryable    = 4;
+}
+
+message ShutdownRequest {
+  int64 grace_ms = 1;
+}
+
+message ShutdownResponse {
+  bool accepted = 1;
+}

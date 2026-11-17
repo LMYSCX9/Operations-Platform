@@ -1,0 +1,3766 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operations Platform · 运维平台底座</title>
+<!--
+  M5 控制台：数据来自同源 /api 接口，无外部资源依赖。
+  术语、状态、能力编号均取自仓库 docs/：
+    00-overview.md / 01-glossary.md / 02-foundation-capabilities.md
+    03-plugin-model.md / 04-plugin-lifecycle.md / 05-extension-points-and-compatibility.md
+    06-non-functional-requirements.md / 08-storage-and-data-directory.md
+  规格中标为「待定」的项一律以 TBD（OQ-xxx）呈现。
+-->
+<style>
+:root{
+  --bg:#eef0f3;
+  --panel:#ffffff;
+  --ink:#1d2733;
+  --muted:#69737f;
+  --line:#dde1e6;
+  --line-soft:#e9ecef;
+  --nav:#1b2430;
+  --nav-2:#232e3c;
+  --nav-ink:#c7d0da;
+  --accent:#2f6fb3;
+  --accent-soft:#eaf2fa;
+  --ok:#2f7a52;
+  --ok-soft:#e8f3ec;
+  --warn:#9a6a12;
+  --warn-soft:#fbf1dc;
+  --bad:#a8322c;
+  --bad-soft:#fbe9e8;
+  --info:#35546f;
+  --info-soft:#e9eef3;
+  --mono:"Cascadia Mono","Consolas","SFMono-Regular",monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font:13px/1.55 "Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent);text-decoration:none}
+code,.mono{font-family:var(--mono);font-size:12px}
+h1,h2,h3,h4{margin:0;font-weight:600}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:none}
+input,select{font:inherit;color:inherit}
+::selection{background:#cfe2f5}
+
+/* ============ 登录页 ============ */
+#login{
+  position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(160deg,#1b2430,#2a3948 60%,#1f2b37);
+}
+.login-card{
+  width:376px;background:#fff;border-radius:4px;padding:30px 32px 26px;
+  box-shadow:0 18px 48px rgba(0,0,0,.38);
+}
+.login-brand{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.login-brand .mark{width:26px;height:26px;border-radius:3px;background:var(--nav);color:#fff;
+  display:grid;place-items:center;font:600 12px/1 var(--mono)}
+.login-brand b{font-size:15px;letter-spacing:.2px}
+.login-sub{color:var(--muted);font-size:12px;margin:2px 0 22px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:#3d4956;margin-bottom:5px}
+.field input{
+  width:100%;height:34px;padding:0 10px;border:1px solid #c9d0d8;border-radius:3px;
+  background:#fcfdfe;outline:none;
+}
+.field input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,111,179,.14)}
+.login-row{display:flex;align-items:center;justify-content:space-between;margin:16px 0 18px;font-size:12px;color:var(--muted)}
+.login-row label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.btn-primary{
+  width:100%;height:36px;border-radius:3px;background:var(--nav);color:#fff;
+  font-weight:600;letter-spacing:.5px;transition:.15s;
+}
+.btn-primary:hover{background:#2b3947}
+.login-foot{margin-top:18px;padding-top:14px;border-top:1px solid var(--line-soft);
+  font-size:11px;color:#8b95a1;line-height:1.7}
+.login-foot .tbd{color:#a3761b}
+.login-err{display:none;margin-bottom:12px;padding:7px 10px;border-radius:3px;
+  background:var(--bad-soft);color:var(--bad);font-size:12px;border-left:3px solid var(--bad)}
+
+/* ============ 主框架 ============ */
+#app{display:none;height:100%;grid-template-columns:216px 1fr}
+#app.on{display:grid}
+.sidebar{background:var(--nav);color:var(--nav-ink);display:flex;flex-direction:column;min-height:0}
+.brand{display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid #2c3744}
+.brand .mark{width:24px;height:24px;border-radius:3px;background:#3a4b5e;color:#fff;
+  display:grid;place-items:center;font:600 11px/1 var(--mono)}
+.brand-txt b{display:block;color:#f2f5f8;font-size:13px;letter-spacing:.3px}
+.brand-txt span{font-size:10px;color:#8d9aa8;letter-spacing:.4px}
+.nav-group{padding:12px 10px 4px;font-size:10px;letter-spacing:1px;color:#75828f}
+.nav-item{
+  display:flex;align-items:center;gap:9px;padding:8px 12px;margin:1px 6px;border-radius:3px;
+  font-size:12.5px;color:var(--nav-ink);cursor:pointer;border-left:2px solid transparent;
+}
+.nav-item:hover{background:var(--nav-2);color:#fff}
+.nav-item.active{background:#2b3947;color:#fff;border-left-color:#5b9bd5}
+.nav-item .ico{width:14px;text-align:center;font-family:var(--mono);font-size:11px;color:#8898a8}
+.nav-item.active .ico{color:#7fb3e0}
+.nav-item .cnt{margin-left:auto;font:11px var(--mono);color:#8d9aa8}
+.side-foot{margin-top:auto;padding:12px 14px;border-top:1px solid #2c3744;font-size:10.5px;color:#7d8b99;line-height:1.8}
+.side-foot .row{display:flex;justify-content:space-between;gap:8px}
+.side-foot b{color:#b9c4cf;font-weight:500}
+
+.main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.topbar{
+  height:46px;background:var(--panel);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:14px;padding:0 18px;flex:0 0 46px;
+}
+.crumb{font-size:12px;color:var(--muted)}
+.crumb b{color:var(--ink);font-weight:600}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--muted)}
+.host-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:20px;
+  background:var(--ok-soft);color:var(--ok);font-size:11.5px;border:1px solid #cfe4d8}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
+.user{display:flex;align-items:center;gap:7px;padding-left:14px;border-left:1px solid var(--line)}
+.avatar{width:24px;height:24px;border-radius:50%;background:#dfe6ee;color:#3c4a59;
+  display:grid;place-items:center;font-size:11px;font-weight:600}
+.content{flex:1;overflow:auto;padding:16px 18px 26px}
+.page{display:none}
+.page.on{display:block}
+
+/* ============ 通用组件 ============ */
+.page-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}
+.page-head h1{font-size:17px;letter-spacing:.2px}
+.page-head p{margin:4px 0 0;color:var(--muted);font-size:12px}
+.page-head .actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.btn{
+  height:29px;padding:0 12px;border:1px solid #c5ccd4;border-radius:3px;background:#fff;
+  font-size:12px;color:#33404d;display:inline-flex;align-items:center;gap:6px;
+}
+.btn:hover{background:#f6f8fa;border-color:#aeb8c2}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#2a639f}
+.btn.danger{color:var(--bad);border-color:#e2c2c0}
+.btn.danger:hover{background:var(--bad-soft)}
+.btn.sm{height:24px;padding:0 8px;font-size:11.5px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:3px}
+.card-h{
+  display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line-soft);
+}
+.card-h h3{font-size:12.5px;letter-spacing:.2px}
+.card-h .sub{color:var(--muted);font-size:11.5px}
+.card-h .right{margin-left:auto;font-size:11.5px;color:var(--muted);display:flex;gap:10px;align-items:center}
+.card-b{padding:12px 14px}
+.grid{display:grid;gap:12px}
+.g-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g-73{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}
+.mt12{margin-top:12px}
+.mt16{margin-top:16px}
+
+/* 指标块 */
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:11px 14px}
+.kpi .label{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.kpi .val{font:600 22px/1.3 var(--mono);margin-top:4px;letter-spacing:-.4px}
+.kpi .val small{font:11px/1 var(--mono);color:var(--muted);letter-spacing:0}
+.kpi .hint{font-size:11px;color:#8a949f;margin-top:2px}
+.kpi.ok .val{color:var(--ok)}
+.kpi.warn .val{color:var(--warn)}
+.kpi.bad .val{color:var(--bad)}
+
+/* 表格 */
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{
+  text-align:left;font-weight:600;color:#5b6672;background:#f7f8fa;
+  padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:11.5px;
+}
+tbody td{padding:7px 10px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+tbody tr:hover{background:#fafbfc}
+tbody tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right;font-family:var(--mono);font-size:11.5px;white-space:nowrap}
+.tbl-wrap{overflow:auto}
+.pl-name{font-weight:600;color:var(--ink);cursor:pointer}
+.pl-name:hover{color:var(--accent);text-decoration:underline}
+.pl-id{font-family:var(--mono);font-size:11px;color:#7b8693;display:block;margin-top:1px}
+.muted{color:var(--muted)}
+.small{font-size:11.5px}
+.nowrap{white-space:nowrap}
+
+/* 状态徽标 */
+.tag{
+  display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px;border-radius:2px;
+  font-size:11px;line-height:1;border:1px solid transparent;white-space:nowrap;
+}
+.tag .d{width:5px;height:5px;border-radius:50%;background:currentColor}
+.tag.ok{background:var(--ok-soft);color:var(--ok);border-color:#cfe4d8}
+.tag.warn{background:var(--warn-soft);color:var(--warn);border-color:#ecdcbb}
+.tag.bad{background:var(--bad-soft);color:var(--bad);border-color:#eccdca}
+.tag.info{background:var(--info-soft);color:var(--info);border-color:#d5dee6}
+.tag.gray{background:#f1f3f5;color:#5f6a76;border-color:#e0e4e8}
+.tag.tbd{background:#fbf4e4;color:#8a630f;border-color:#ecdcb5;font-family:var(--mono)}
+.tag.form{background:#fff;border-color:#ccd4dc;color:#42505e;font-family:var(--mono);font-size:10.5px}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:6px 10px;font-size:12px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;word-break:break-all}
+.tbd-inline{font-family:var(--mono);font-size:11px;color:#8a630f;background:#fbf4e4;
+  border:1px dashed #e2ce9e;border-radius:2px;padding:0 4px;white-space:nowrap}
+
+/* 开关 */
+.switch{position:relative;display:inline-block;width:32px;height:17px;flex:0 0 auto}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:#c3cbd3;border-radius:20px;transition:.18s;cursor:pointer}
+.slider:before{content:"";position:absolute;width:13px;height:13px;left:2px;top:2px;background:#fff;
+  border-radius:50%;transition:.18s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.switch input:checked + .slider{background:var(--ok)}
+.switch input:checked + .slider:before{transform:translateX(15px)}
+.switch input:disabled + .slider{opacity:.5;cursor:not-allowed}
+
+/* 侧内导航 / 标签页 */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.tab{padding:7px 12px;font-size:12.5px;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer}
+.tab:hover{color:var(--ink)}
+.tab.active{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
+
+/* 分布条 */
+.dist{display:flex;height:8px;border-radius:2px;overflow:hidden;background:#eef1f4;margin:8px 0 10px}
+.dist i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:10px 16px;font-size:11.5px;color:#5b6672}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend .sq{width:7px;height:7px;border-radius:1px}
+
+/* 列表行（最近执行） */
+.ev{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line-soft);font-size:12px}
+.ev:last-child{border-bottom:none}
+.ev .t{font-family:var(--mono);font-size:11px;color:#8a949f;flex:0 0 78px}
+.ev .who{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev .who b{font-weight:600}
+.ev .who em{font-style:normal;color:var(--muted);font-family:var(--mono);font-size:11px}
+
+/* 告警 */
+.alert{display:flex;gap:9px;padding:8px 11px;border-radius:3px;font-size:12px;border:1px solid;line-height:1.6}
+.alert b{font-weight:600}
+.alert.warn{background:var(--warn-soft);border-color:#ecd9b4;color:#6d4d0c}
+.alert.bad{background:var(--bad-soft);border-color:#eecfcc;color:#7d2521}
+.alert.info{background:var(--accent-soft);border-color:#cfe0f1;color:#255274}
+.alert .x{margin-left:auto;color:inherit;opacity:.6;cursor:pointer}
+.alert .x:hover{opacity:1}
+
+/* 筛选条 */
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;
+  background:var(--panel);border:1px solid var(--line);border-radius:3px;margin-bottom:10px}
+.filters label{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.filters select,.filters input{
+  height:27px;border:1px solid #c9d0d8;border-radius:3px;background:#fff;padding:0 8px;font-size:12px;outline:none;
+}
+.filters select:focus,.filters input:focus{border-color:var(--accent)}
+.filters .sep{width:1px;height:18px;background:var(--line);margin:0 4px}
+.filters .result{margin-left:auto;font-size:11.5px;color:var(--muted);font-family:var(--mono)}
+
+/* 详情抽屉 / 展开 */
+tr.expandable{cursor:pointer}
+tr.row-exp td{background:#f8fafc;padding:0}
+.expand-inner{padding:12px 16px 14px;border-left:3px solid var(--accent)}
+.io-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+.io-box{border:1px solid var(--line);border-radius:3px;background:#fff}
+.io-box .h{display:flex;justify-content:space-between;padding:5px 9px;border-bottom:1px solid var(--line-soft);
+  font-size:11px;color:#5b6672;background:#f7f8fa}
+.io-box pre{margin:0;padding:8px 9px;font:11px/1.6 var(--mono);color:#3c4956;white-space:pre-wrap;max-height:150px;overflow:auto}
+.chev{color:#9aa4ae;transition:.15s;display:inline-block;font-family:var(--mono);font-size:10px}
+tr.open .chev{transform:rotate(90deg)}
+
+/* 插件详情 */
+.back-link{font-size:12px;color:var(--muted);display:inline-flex;gap:5px;align-items:center;margin-bottom:8px;cursor:pointer}
+.back-link:hover{color:var(--accent)}
+.detail-hero{display:flex;align-items:center;gap:14px;padding:14px 16px}
+.detail-hero .ico-lg{width:42px;height:42px;border-radius:4px;background:#eef2f6;color:#3d5266;
+  display:grid;place-items:center;font:600 15px/1 var(--mono);border:1px solid #dbe2e9}
+.detail-hero h2{font-size:16px}
+.detail-hero .meta{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:5px;font-size:11.5px;color:var(--muted);align-items:center}
+.detail-hero .ops{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.section{margin-bottom:12px}
+.section > .card-h{background:#fbfcfd}
+.manifest-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px}
+.mgroup{padding:9px 0;border-bottom:1px solid var(--line-soft)}
+.mgroup:last-child{border-bottom:none}
+.mgroup h4{font-size:11.5px;color:#42505e;margin-bottom:5px;display:flex;align-items:center;gap:6px}
+.mgroup h4 .k{font:10px var(--mono);color:#93a0ac}
+.cap-item{border:1px solid var(--line);border-radius:3px;padding:9px 11px;margin-bottom:8px;background:#fcfdfe}
+.cap-item:last-child{margin-bottom:0}
+.cap-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cap-top code{font-weight:600;color:#24455f;font-size:12px}
+.cap-desc{font-size:11.5px;color:var(--muted);margin-top:4px}
+.cap-flags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.flag{font-size:10.5px;color:#5b6672;background:#f1f3f5;border:1px solid #e2e6ea;border-radius:2px;padding:1px 5px}
+.flag.sens{background:#fdf0ec;border-color:#f0d6cd;color:#96502f}
+.timeline{position:relative;padding-left:14px}
+.timeline:before{content:"";position:absolute;left:3px;top:4px;bottom:4px;width:1px;background:var(--line)}
+.tl-item{position:relative;padding-bottom:11px;font-size:12px}
+.tl-item:last-child{padding-bottom:0}
+.tl-item:before{content:"";position:absolute;left:-14px;top:5px;width:7px;height:7px;border-radius:50%;
+  background:#fff;border:1.5px solid #a9b4bf}
+.tl-item.ok:before{border-color:var(--ok)}
+.tl-item.bad:before{border-color:var(--bad)}
+.tl-item .tm{font:11px var(--mono);color:#8a949f}
+.tl-item .tx{color:#3c4956}
+.tl-item .tx b{font-weight:600;color:var(--ink)}
+.ops-list{display:flex;flex-direction:column;gap:0}
+.op-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px dashed var(--line-soft);font-size:12px}
+.op-row:last-child{border-bottom:none}
+.op-row .grow{flex:1}
+.op-row .why{font-size:11px;color:#8a949f}
+
+/* 凭据 */
+.mask{font-family:var(--mono);letter-spacing:1px;color:#4a5663}
+.enc{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--ok)}
+.enc .lk{font-family:var(--mono)}
+.notice{padding:9px 12px;border:1px solid #cfe0f1;background:var(--accent-soft);border-radius:3px;
+  font-size:11.5px;color:#255274;line-height:1.65}
+.notice b{font-weight:600}
+.notice code{background:#fff;padding:0 3px;border-radius:2px}
+
+/* 设置 */
+.path-tree{font:11.5px/1.9 var(--mono);color:#3c4956;background:#fbfcfd;border:1px solid var(--line);
+  border-radius:3px;padding:10px 12px;white-space:pre;overflow:auto}
+.path-tree .c{color:#8a949f}
+.path-tree .k{color:#24455f;font-weight:600}
+.storage-row{display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px dashed var(--line-soft)}
+.storage-row:last-child{border-bottom:none}
+.storage-row span:last-child{font-family:var(--mono);font-size:11.5px}
+
+/* 主机管理 / 下发 */
+.drawer-mask{position:fixed;inset:0;background:rgba(20,28,37,.42);z-index:45;display:none}
+.drawer-mask.open{display:block}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;width:472px;z-index:46;background:#fff;
+  display:none;flex-direction:column;box-shadow:-14px 0 34px rgba(15,22,30,.22);
+}
+.drawer.open{display:flex}
+.drawer-h{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line)}
+.drawer-h h3{font-size:13.5px}
+.drawer-h .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.drawer-b{flex:1;overflow:auto;padding:14px 16px}
+.drawer-f{padding:11px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;background:#fbfcfd}
+.form-row{margin-bottom:13px}
+.form-row > label{display:block;font-size:11.5px;color:#3d4956;margin-bottom:5px}
+.form-row input[type=text],.form-row input[type=password],.form-row select,.form-row textarea{
+  width:100%;height:32px;border:1px solid #c9d0d8;border-radius:3px;background:#fff;padding:0 9px;font-size:12px;outline:none;
+}
+.form-row textarea{height:92px;padding:8px 9px;font:11.5px/1.6 var(--mono);resize:vertical}
+.form-row input:focus,.form-row select:focus,.form-row textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,111,179,.12)}
+.form-row .hint{font-size:11px;color:#8a949f;margin-top:4px;line-height:1.6}
+.radio-row{display:flex;gap:16px;padding:2px 0 1px}
+.radio-row label{display:flex;align-items:center;gap:6px;font-size:12px;color:#33404d;cursor:pointer}
+.auth-block{border:1px solid var(--line);border-radius:3px;padding:11px 12px 2px;background:#fbfcfd;margin-bottom:13px}
+.auth-block .bh{font-size:11.5px;color:#42505e;margin-bottom:8px;display:flex;gap:6px;align-items:center}
+.host-addr{font-family:var(--mono);font-size:11.5px;color:#3c4956}
+.stat-mini{display:flex;gap:18px;flex-wrap:wrap;font-size:11.5px;color:var(--muted)}
+.stat-mini b{font-family:var(--mono);color:var(--ink);font-weight:600}
+.push-list{margin-top:10px;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.push-row{display:flex;align-items:center;gap:9px;padding:7px 10px;font-size:11.5px;border-bottom:1px solid var(--line-soft);background:#fff}
+.push-row:last-child{border-bottom:none}
+.push-row .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.push-row .tm{font-family:var(--mono);font-size:10.5px;color:#8a949f;flex:0 0 auto}
+.progress{height:4px;background:#eef1f4;border-radius:2px;overflow:hidden;margin-top:3px}
+.progress i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.subsect{display:flex;align-items:center;gap:8px;padding:2px 0 7px;font-size:12px;font-weight:600;color:#33404d}
+.subsect .cnt{font:10.5px var(--mono);color:#69737f;background:#f1f3f5;border:1px solid #e2e6ea;border-radius:9px;padding:0 6px}
+.subsect .right{margin-left:auto;font-weight:400;font-size:11px;color:var(--muted)}
+.subsect.mt{padding-top:13px;border-top:1px solid var(--line-soft);margin-top:4px}
+.hp-tools{display:flex;align-items:center;gap:9px;padding:9px 0 0;flex-wrap:wrap}
+.linknum{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
+.linknum:hover{text-decoration:underline}
+
+@media (max-width:1180px){
+  .g-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .g-73,.g-2{grid-template-columns:minmax(0,1fr)}
+  .manifest-groups{grid-template-columns:minmax(0,1fr)}
+}
+</style>
+</head>
+<body>
+<!-- ================= 登录页 ================= -->
+<div id="login">
+  <div class="login-card">
+    <div class="login-brand">
+      <span class="mark">OP</span>
+      <b>Operations Platform</b>
+    </div>
+    <div class="login-sub">运维平台底座 · 插件统一管理入口</div>
+    <div class="login-err" id="loginErr"></div>
+    <form id="loginForm" autocomplete="off">
+      <div class="field">
+        <label for="acct">账号</label>
+        <input id="acct" placeholder="用户名" spellcheck="false" autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="pwd">口令</label>
+        <input id="pwd" type="password" placeholder="口令" autocomplete="current-password">
+      </div>
+      <div class="login-row">
+        <span>身份源：本地账号（外部身份源 <span class="tbd">TBD（OQ-037）</span>）</span>
+      </div>
+      <button type="submit" class="btn-primary" id="loginBtn">登 录</button>
+    </form>
+    <div class="login-foot">
+      登录失败次数受限；会话有效性由服务端 Cookie 判定。<br>
+      口令仅存不可逆派生值，任何接口不返回（DOC-08 §2）；派生算法与参数 <span class="tbd">TBD（OQ-003）</span>。
+    </div>
+  </div>
+</div>
+<!-- ================= 控制台主框架 ================= -->
+<div id="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="mark">OP</span>
+      <span class="brand-txt"><b>Operations Platform</b><span>运维平台底座</span></span>
+    </div>
+    <div class="nav-group">导航</div>
+    <div class="nav-item active" data-page="overview"><span class="ico">▤</span>总览</div>
+    <div class="nav-item" data-page="plugins"><span class="ico">▦</span>插件管理<span class="cnt" id="navPluginCnt">0</span></div>
+    <div class="nav-item" data-page="hosts"><span class="ico">⌂</span>主机管理<span class="cnt" id="navHostCnt">0</span></div>
+    <div class="nav-item" data-page="tasks"><span class="ico">◷</span>定时任务<span class="cnt" id="navTaskCnt">0</span></div>
+    <div class="nav-item" data-page="records"><span class="ico">≡</span>执行记录 / 审计</div>
+    <div class="nav-item" data-page="credentials"><span class="ico">⚿</span>凭据管理</div>
+    <div class="nav-item" data-page="settings"><span class="ico">⚙</span>系统设置</div>
+    <div class="side-foot">
+      <div class="row"><span>底座版本</span><b><span class="tbd-inline">TBD</span></b></div>
+      <div class="row"><span>契约版本</span><b>1.x</b></div>
+      <div class="row"><span>自检</span><b>未查询</b></div>
+      <div class="row" style="margin-top:4px"><span>规格状态</span><b>见 docs/</b></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="crumb"><span id="crumbRoot">控制台</span> / <b id="crumbPage">总览</b></div>
+      <div class="topbar-right">
+        <span class="host-pill"><span class="dot"></span>控制台已连接</span>
+        <span class="mono" style="font-size:11px">localhost:<span class="tbd-inline">TBD（OQ-008）</span></span>
+        <span class="user"><span class="avatar" id="userAvatar">—</span><span id="userName">—</span><span class="tag gray" id="userRole" style="height:18px">—</span></span>
+        <button class="btn sm" id="logoutBtn">退出</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- ========== 页面：总览 ========== -->
+      <section class="page on" id="page-overview">
+        <div class="page-head">
+          <div>
+            <h1>总览</h1>
+            <p>底座自检、插件注册表状态与最近执行概况（CAP-01 / CAP-05 / CAP-11）</p>
+          </div>
+          <div class="actions">
+            <span class="small muted mono">统计范围：最近 24 小时</span>
+            <button class="btn" onclick="refreshOverview()">刷新</button>
+          </div>
+        </div>
+
+        <div class="grid g-4">
+          <div class="kpi">
+            <div class="label">底座健康状态 <span class="tag gray" id="kpiHealthTag" style="height:18px">未查询</span></div>
+            <div class="val" style="font-size:17px" id="kpiHealth">—</div>
+            <div class="hint">健康检查未在本期接口契约内（待定）</div>
+          </div>
+          <div class="kpi">
+            <div class="label">已安装插件</div>
+            <div class="val" id="kpiPlugins">— <small>个</small></div>
+            <div class="hint">注册表为唯一权威状态来源</div>
+          </div>
+          <div class="kpi">
+            <div class="label">已启用 / 已禁用</div>
+            <div class="val" id="kpiPluginEnabled">— <small>/ — 个</small></div>
+            <div class="hint">插件状态只有 enabled / disabled</div>
+          </div>
+          <div class="kpi">
+            <div class="label">近 24h 执行</div>
+            <div class="val" id="kpiExec24">— <small>次 · 失败 —</small></div>
+            <div class="hint">按执行记录统计（窗口口径 OQ-043）</div>
+          </div>
+        </div>
+
+        <div class="grid g-4 mt12">
+          <div class="kpi">
+            <div class="label">主机总数</div>
+            <div class="val" id="kpiHosts">— <small>台</small></div>
+            <div class="hint">侧边栏配置的可下发目标</div>
+          </div>
+          <div class="kpi">
+            <div class="label">异常主机</div>
+            <div class="val" id="kpiHostsBad">— <small>台</small></div>
+            <div class="hint">最近一次连通性测试非可达</div>
+          </div>
+          <div class="kpi">
+            <div class="label">已下发插件</div>
+            <div class="val" id="kpiHostPlugins">— <small>个</small></div>
+            <div class="hint">仅统计 state=installed 的下发记录</div>
+          </div>
+          <div class="kpi">
+            <div class="label">近 7 日下发失败</div>
+            <div class="val" id="kpiPushFail">— <small>次</small></div>
+            <div class="hint">当前接口未提供该指标（待定）</div>
+          </div>
+        </div>
+
+        <div class="grid g-4 mt12">
+          <div class="kpi">
+            <div class="label">启用中任务</div>
+            <div class="val" id="kpiTasksOn">— <small>个</small></div>
+            <div class="hint" id="kpiTasksOnHint">已暂停的任务不参与调度</div>
+          </div>
+          <div class="kpi">
+            <div class="label">近 24h 执行次数</div>
+            <div class="val" id="kpiTaskRuns">— <small>次</small></div>
+            <div class="hint">含手动、定时与 API 来源</div>
+          </div>
+          <div class="kpi">
+            <div class="label">近 24h 失败次数</div>
+            <div class="val" id="kpiTaskFails">— <small>次</small></div>
+            <div class="hint">失败告警通道 <span class="tbd-inline">TBD（OQ-045）</span></div>
+          </div>
+          <div class="kpi">
+            <div class="label">下一个待执行任务</div>
+            <div class="val" id="kpiTaskNext" style="font-size:14px">—</div>
+            <div class="hint" id="kpiTaskNextHint">—</div>
+          </div>
+        </div>
+
+        <div class="mt12" id="overviewAlerts">
+          <div class="alert info"><span>■</span><div>总览数据加载中…</div></div>
+        </div>
+
+        <div class="grid g-73 mt12">
+          <div class="card">
+            <div class="card-h">
+              <h3>插件状态分布</h3>
+              <span class="sub">按注册表状态（DOC-04 状态机）</span>
+              <div class="right"><a href="#" onclick="go('plugins');return false">查看插件管理 →</a></div>
+            </div>
+            <div class="card-b">
+              <div class="dist" id="distBar"></div>
+              <div class="legend" id="distLegend"></div>
+              <table class="mt12">
+                <thead><tr><th>插件</th><th>形态</th><th>插件版本</th><th>状态</th><th class="num">能力数</th></tr></thead>
+                <tbody id="overviewPluginRows"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <div class="card">
+              <div class="card-h"><h3>底座自检</h3><div class="right">只读（CAP-11）</div></div>
+              <div class="card-b">
+                <dl class="kv">
+                  <dt>底座版本</dt><dd><span class="tbd-inline">TBD（未在本期接口契约内）</span></dd>
+                  <dt>契约版本</dt><dd class="mono">1.x（规则见 DOC-05 / OQ-006）</dd>
+                  <dt>存储引擎</dt><dd>嵌入式 SQLite（纯 Go、免 cgo，ADR-0007）</dd>
+                  <dt>运行时长</dt><dd><span class="tbd-inline">TBD（未在本期接口契约内）</span></dd>
+                  <dt>监听地址</dt><dd><span class="tbd-inline">TBD（OQ-008 / NFR-DEP-03）</span></dd>
+                  <dt>数据目录</dt><dd><span class="tbd-inline">TBD（OQ-022）</span></dd>
+                </dl>
+              </div>
+            </div>
+            <div class="card mt12">
+              <div class="card-h"><h3>最近执行记录</h3><div class="right"><a href="#" onclick="go('records');return false">全部 →</a></div></div>
+              <div class="card-b" id="overviewRecent" style="padding-top:6px;padding-bottom:6px"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- ========== 页面：主机管理 ========== -->
+      <section class="page" id="page-hosts">
+        <div class="page-head">
+          <div>
+            <h1>主机管理</h1>
+            <p>配置可下发插件的主机与认证凭据，并跟踪下发结果</p>
+          </div>
+          <div class="actions">
+            <button class="btn primary" onclick="openHostDrawer()">新增主机</button>
+          </div>
+        </div>
+
+        <div class="alert info" style="margin-bottom:10px">
+          <span>■</span>
+          <div><b>能力依据</b>：主机管理与插件下发依据 <b>CAP-13</b> 与主机管理规格。
+            主机连接参数由服务端保存；凭据永不回显，编辑时留空表示不修改。</div>
+        </div>
+
+        <div class="filters">
+          <label>搜索 <input id="hsSearch" placeholder="主机名称 / 地址" style="width:200px"></label>
+          <label>连接方式
+            <select id="hsAuth">
+              <option value="">全部</option>
+              <option value="key">SSH 密钥</option>
+              <option value="password">账号密码</option>
+            </select>
+          </label>
+          <label>连通性
+            <select id="hsConn">
+              <option value="">全部</option>
+              <option value="reachable">可达</option>
+              <option value="unreachable">不可达</option>
+              <option value="fingerprint_mismatch">指纹不匹配</option>
+              <option value="unknown">未测试</option>
+            </select>
+          </label>
+          <span class="result" id="hsCount">—</span>
+        </div>
+
+        <div class="card">
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:20%">主机名称</th>
+                  <th style="width:16%">地址</th>
+                  <th style="width:11%">连接方式</th>
+                  <th style="width:9%">连通性</th>
+                  <th class="num" style="width:8%">已下发</th>
+                  <th style="width:15%">最近测试</th>
+                  <th style="width:21%">操作</th>
+                </tr>
+              </thead>
+              <tbody id="hostRows"></tbody>
+            </table>
+          </div>
+          <div class="card-b" style="border-top:1px solid var(--line-soft);font-size:11.5px;color:var(--muted)">
+            连通性状态仅表示主机最近一次可达性测试结果，与插件在底座内的状态无关。
+            下发失败不会改变插件注册表状态（DOC-04 §3.5）；已下发不等于可调用（OQ-027）。
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 页面：主机详情 ========== -->
+      <section class="page" id="page-host-detail">
+        <div class="back-link" onclick="go('hosts')">← 返回主机管理</div>
+        <div class="card">
+          <div class="detail-hero">
+            <div class="ico-lg" id="hdIco">H</div>
+            <div>
+              <h2 id="hdName">—</h2>
+              <div class="meta" id="hdMeta"></div>
+            </div>
+            <div class="ops">
+              <button class="btn" onclick="testHost(currentHostId)">测试连接</button>
+              <button class="btn" onclick="openHostDrawer(currentHostId)">编辑</button>
+              <button class="btn" onclick="openPush(currentHostId)">自定义下发</button>
+              <button class="btn primary" onclick="scrollHostPlugins()">下发插件</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid g-73 mt12">
+          <div class="card" id="hostPluginsCard">
+            <div class="card-h">
+              <h3>插件</h3><span class="sub" id="hdPlugCount"></span>
+              <div class="right"><span class="small">已下发 ≠ 可调用（OQ-027）</span></div>
+            </div>
+            <div class="card-b">
+              <div class="subsect">已下发到本机 <span class="cnt" id="hdDeployedCnt">0</span>
+                <span class="right">撤销需二次确认，记录同步更新</span></div>
+              <div class="tbl-wrap">
+                <table>
+                  <thead><tr>
+                    <th>插件</th><th style="width:16%">形态</th><th style="width:12%">版本</th>
+                    <th style="width:14%">下发状态</th><th style="width:18%">下发时间</th><th style="width:12%">操作</th>
+                  </tr></thead>
+                  <tbody id="hdPluginsDeployed"></tbody>
+                </table>
+              </div>
+
+              <div class="subsect mt">尚未下发到本机 <span class="cnt" id="hdRestCnt">0</span>
+                <span class="right">来自类型目录（仅支持远端的 daemon 类型），可多选批量下发</span></div>
+              <div class="tbl-wrap">
+                <table>
+                  <thead><tr>
+                    <th style="width:30px"><input type="checkbox" id="hpAll" onchange="toggleAllHostPlugins(this.checked)"></th>
+                    <th>插件类型</th><th style="width:16%">形态</th><th style="width:11%">版本</th><th class="num" style="width:10%">能力数</th><th style="width:12%">托管</th>
+                  </tr></thead>
+                  <tbody id="hdPluginsRest"></tbody>
+                </table>
+              </div>
+              <div class="hp-tools">
+                <span class="small muted" id="hpSelCount">已选 0 个</span>
+                <button class="btn primary sm" id="hpBatchBtn" onclick="batchDeploy()" disabled>批量下发</button>
+                <span class="small muted">批量下发使用清单默认端口；需指定端口请用页面顶部「自定义下发」。</span>
+              </div>
+              <div id="hpProgress"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h"><h3>基本信息</h3><div class="right">凭据永不回显</div></div>
+            <div class="card-b"><dl class="kv" id="hdInfo"></dl></div>
+          </div>
+        </div>
+
+        <div class="card mt12">
+          <div class="card-h">
+            <h3>远端实例</h3><span class="sub" id="hdInstCount">—</span>
+            <div class="right"><span class="small">GET /api/plugin-instances?host_id=…</span></div>
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr>
+                <th style="width:27%">实例</th><th style="width:13%">类型</th><th style="width:8%">端口</th>
+                <th style="width:17%">三态</th><th style="width:17%">状态 / 漂移</th><th style="width:10%">最近探测</th><th style="width:14%">操作</th>
+              </tr></thead>
+              <tbody id="hdInstances"></tbody>
+            </table>
+          </div>
+          <div class="card-b" style="border-top:1px solid var(--line-soft);color:var(--muted);font-size:11.5px">
+            远端实例随下发创建，标识为 <code>remote:&lt;host&gt;:&lt;plugin&gt;</code>；三态由底座探测决定，漂移时禁止启用与调用。
+            探测间隔、状态过期 TTL、远端超时为可配置基线，待 <span class="tbd-inline">OQ-047～OQ-051</span> 确认。
+          </div>
+        </div>
+
+        <div class="card mt12">
+          <div class="card-h"><h3>下发记录</h3><span class="sub">queued → connecting → uploading → verifying → installing → installed → starting → started / start_failed</span></div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th style="width:14%">创建时间</th><th style="width:19%">插件</th><th style="width:16%">三态</th><th style="width:11%">状态</th><th style="width:10%">阶段</th><th style="width:12%">起止</th><th>实例 / 证书 / 错误</th><th style="width:9%">操作</th></tr></thead>
+              <tbody id="hdDeploys"></tbody>
+            </table>
+          </div>
+          <div class="card-b" style="border-top:1px solid var(--line-soft);color:var(--muted);font-size:11.5px">
+            <code>installed</code> / <code>started</code> / <code>callable</code> 是三个独立事实：已下发不等于已启动，更不等于可调用。
+            证书序列号与指纹用于指纹校验（TOFU）；证书有效期为可配置基线，待 <span class="tbd-inline">OQ-047～OQ-051</span> 确认。
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 页面：插件管理（类型目录 + 实例） ========== -->
+      <section class="page" id="page-plugins">
+        <div class="page-head">
+          <div>
+            <h1>插件管理</h1>
+            <p>类型目录与实例视角（CAP-01）：类型是包与清单的抽象，实例绑定到本机或某台主机</p>
+          </div>
+          <div class="actions">
+            <button class="btn" onclick="refreshPlugins()">刷新</button>
+            <button class="btn" onclick="scanPlugins(this)">扫描插件包</button>
+            <button class="btn primary" onclick="alert('安装插件包接口未开放（待定）')">安装插件包</button>
+          </div>
+        </div>
+
+        <div class="alert info" style="margin-bottom:10px">
+          <span>■</span>
+          <div>
+            实例标识：本机 <code>local:&lt;插件&gt;</code>，远端 <code>remote:&lt;主机&gt;:&lt;插件&gt;</code>；
+            三态（已安装 / 已启动 / 可调用）<b>独立记录、互不推断</b>，状态由底座探测决定，不采信插件自报。
+            证书有效期、探测间隔、状态过期 TTL、远端超时等为<b>可配置基线</b>，待
+            <span class="tbd-inline">OQ-047～OQ-051</span> 确认。
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <h3>类型目录</h3><span class="sub" id="typeCount">—</span>
+            <div class="right">
+              <label class="small muted">搜索 <input id="typeSearch" placeholder="类型标识 / 名称 / 能力" style="width:200px;height:26px;border:1px solid #c9d0d8;border-radius:3px;padding:0 8px;font-size:12px"></label>
+            </div>
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:24%">类型</th>
+                  <th style="width:11%">形态</th>
+                  <th style="width:9%">托管</th>
+                  <th style="width:11%">最新版本</th>
+                  <th style="width:13%">契约版本</th>
+                  <th class="num" style="width:8%">能力数</th>
+                  <th class="num" style="width:8%">实例数</th>
+                  <th style="width:16%"></th>
+                </tr>
+              </thead>
+              <tbody id="typeRows"></tbody>
+            </table>
+          </div>
+          <div class="card-b" style="border-top:1px solid var(--line-soft);color:var(--muted);font-size:11.5px">
+            类型目录来自 <code>GET /api/plugin-types</code>，能力数按类型聚合；实例数包含本机与远端实例。
+            命令式类型只能有本机实例，远端实例要求 <code>form: daemon</code> 与 <code>runtime.listen.port</code>。
+          </div>
+        </div>
+
+        <div class="card mt12">
+          <div class="card-h">
+            <h3>实例列表</h3><span class="sub" id="instCount">—</span>
+            <div class="right"><span class="small">远端实例随主机下发创建</span></div>
+          </div>
+          <div class="filters" style="border:none;border-bottom:1px solid var(--line-soft);border-radius:0;margin:0">
+            <label>搜索 <input id="instSearch" placeholder="实例标识 / 类型 / 主机" style="width:200px"></label>
+            <span class="sep"></span>
+            <label>类型 <select id="instType"><option value="">全部</option></select></label>
+            <label>主机 <select id="instHost"><option value="">全部</option></select></label>
+            <label>状态
+              <select id="instState">
+                <option value="">全部</option>
+                <option value="installed">已安装 installed</option>
+                <option value="started">已启动 started</option>
+                <option value="callable">可调用 callable</option>
+                <option value="start_failed">启动失败 start_failed</option>
+                <option value="stop_failed">停止失败 stop_failed</option>
+                <option value="drifted">漂移 drifted</option>
+                <option value="unknown">未知 unknown</option>
+                <option value="disabled">已停用 disabled</option>
+                <option value="revoked">已撤销 revoked</option>
+              </select>
+            </label>
+            <span class="result" id="instFilterCount">—</span>
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:23%">实例</th>
+                  <th style="width:16%">类型</th>
+                  <th style="width:13%">托管 / 主机</th>
+                  <th style="width:9%">版本</th>
+                  <th style="width:17%">三态</th>
+                  <th style="width:13%">状态</th>
+                  <th style="width:8%">启用</th>
+                  <th style="width:11%">最近探测</th>
+                </tr>
+              </thead>
+              <tbody id="instanceRows"></tbody>
+            </table>
+          </div>
+          <div class="card-b" style="border-top:1px solid var(--line-soft);color:var(--muted);font-size:11.5px">
+            状态过期会降为 <code>unknown</code>；漂移（包缺失 / 版本不一致 / 证书不匹配 / unit 缺失）时禁止启用与调用。
+            阈值与探测间隔为可配置基线，待 <span class="tbd-inline">OQ-047～OQ-051</span> 确认。
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 页面：实例详情 ========== -->
+      <section class="page" id="page-plugin-detail">
+        <div class="back-link" onclick="go('plugins')">← 返回插件管理</div>
+        <div class="card">
+          <div class="detail-hero">
+            <div class="ico-lg" id="iIco">IN</div>
+            <div>
+              <h2 id="iName">—</h2>
+              <div class="meta" id="iMeta"></div>
+            </div>
+            <div class="ops">
+              <button class="btn" id="iToggleBtn" onclick="toggleCurrentInstance()">启用</button>
+              <button class="btn" onclick="probeCurrentInstance()">探测</button>
+              <button class="btn primary" onclick="openInvoke()">调用</button>
+              <button class="btn" id="iPushBtn" onclick="openPush(currentInstanceHost())">下发到主机</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid g-73 mt12">
+          <div>
+            <div class="section card">
+              <div class="card-h"><h3>实例状态</h3><span class="sub">三态独立记录，不互相推断</span><div class="right">GET /api/plugin-instances/{id}</div></div>
+              <div class="card-b"><dl class="kv" id="iState"></dl></div>
+            </div>
+
+            <div class="section card">
+              <div class="card-h"><h3>声明的能力</h3><span class="sub" id="iCapCount"></span><div class="right">声明即契约（INV-1）</div></div>
+              <div class="card-b" id="iCaps"></div>
+            </div>
+
+            <div class="section card">
+              <div class="card-h"><h3>实例配置（掩码）</h3><span class="sub" id="iConfigCount"></span><div class="right">只返回 configured / updated_at / updated_by，值永不回显</div></div>
+              <div class="card-b" id="iConfig"></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="section card">
+              <div class="card-h"><h3>类型信息</h3><div class="right">类型级模板</div></div>
+              <div class="card-b"><dl class="kv" id="iType"></dl></div>
+            </div>
+            <div class="section card">
+              <div class="card-h"><h3>可执行操作</h3><span class="sub">状态变更串行化</span></div>
+              <div class="card-b">
+                <div class="ops-list" id="iOps"></div>
+              </div>
+            </div>
+            <div class="section card">
+              <div class="card-h"><h3>探测历史</h3><span class="sub" id="iProbeCount"></span><div class="right">按时间倒序</div></div>
+              <div class="card-b">
+                <div class="timeline" id="iProbes"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- ========== 页面：定时任务 ========== -->
+      <section class="page" id="page-tasks">
+        <div class="page-head">
+          <div>
+            <h1>定时任务</h1>
+            <p>按触发规则调用实例能力；每次执行都经调用网关（CAP-02）并写入执行记录（CAP-05）</p>
+          </div>
+          <div class="actions">
+            <button class="btn primary" onclick="openTaskDrawer()">新建任务</button>
+          </div>
+        </div>
+
+        <div class="alert info" style="margin-bottom:10px">
+          <span>■</span>
+          <div>
+            目标以<b>实例</b>为准（本机 <code>local:&lt;插件&gt;</code>、远端 <code>remote:&lt;主机&gt;:&lt;插件&gt;</code>）；
+            旧任务只有 <code>plugin_id</code> 时按本机别名兼容显示。错过执行<b>不补跑</b>；实例不可用时任务保留但不调度。
+            失败告警通道 <span class="tbd-inline">TBD（OQ-045）</span>。
+          </div>
+        </div>
+
+        <div class="filters">
+          <label>搜索 <input id="tkSearch" placeholder="任务名 / 实例 / 类型 / 能力" style="width:210px"></label>
+          <span class="sep"></span>
+          <label>启用状态
+            <select id="tkEnabled">
+              <option value="">全部</option>
+              <option value="on">启用中</option>
+              <option value="off">已暂停</option>
+            </select>
+          </label>
+          <label>上次结果
+            <select id="tkResult">
+              <option value="">全部</option>
+              <option value="ok">成功</option>
+              <option value="error">失败</option>
+              <option value="timeout">超时</option>
+              <option value="skipped">跳过</option>
+              <option value="missed">错过</option>
+              <option value="interrupted">中断</option>
+            </select>
+          </label>
+          <span class="result" id="tkCount">—</span>
+        </div>
+
+        <div class="card">
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:19%">任务名</th>
+                  <th style="width:22%">执行体（实例 + 能力）</th>
+                  <th style="width:17%">触发规则</th>
+                  <th style="width:11%">下次执行</th>
+                  <th style="width:15%">上次执行</th>
+                  <th style="width:7%">启用</th>
+                  <th style="width:11%">操作</th>
+                </tr>
+              </thead>
+              <tbody id="taskRows"></tbody>
+            </table>
+          </div>
+          <div class="card-b" style="border-top:1px solid var(--line-soft);font-size:11.5px;color:var(--muted)">
+            执行体只能选择该插件已声明的能力（DOC-03）；手动触发、定时触发与 API 调用写入同一份执行记录。
+            错过执行不补跑，任务记录保留期 <span class="tbd-inline">TBD（OQ-044）</span>。
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 页面：任务详情 ========== -->
+      <section class="page" id="page-task-detail">
+        <div class="back-link" onclick="go('tasks')">← 返回定时任务</div>
+
+        <div class="card">
+          <div class="detail-hero">
+            <div class="ico-lg">◷</div>
+            <div>
+              <h2 id="tdName">—</h2>
+              <div class="meta" id="tdMeta"></div>
+            </div>
+            <div class="ops">
+              <button class="btn primary" onclick="runTaskNow()">立即执行</button>
+              <button class="btn" id="tdToggleBtn" onclick="toggleTaskFromDetail()">暂停</button>
+              <button class="btn" onclick="openTaskDrawer(currentTaskId)">编辑</button>
+              <button class="btn danger" onclick="deleteTask()">删除</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid g-73 mt12">
+          <div class="card">
+            <div class="card-h">
+              <h3>最近执行历史</h3><span class="sub" id="tdHistSub"></span>
+              <div class="right">来自执行记录（CAP-05）</div>
+            </div>
+            <div class="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:20%">时间</th>
+                    <th style="width:10%">结果</th>
+                    <th class="num" style="width:10%">耗时</th>
+                    <th>失败原因 / 说明</th>
+                    <th style="width:9%">记录</th>
+                  </tr>
+                </thead>
+                <tbody id="tdHistory"></tbody>
+              </table>
+            </div>
+            <div class="card-b" style="border-top:1px solid var(--line-soft);font-size:11.5px;color:var(--muted)">
+              手动「立即执行」的触发来源记为「手动」，定时触发记为「定时任务」；两者写入同一份执行记录。
+              执行历史保留期与归档方式 <span class="tbd-inline">TBD（OQ-016）</span>。
+            </div>
+          </div>
+
+          <div>
+            <div class="card">
+              <div class="card-h">
+                <h3>任务定义</h3>
+                <div class="right">字段名以接口返回为准</div>
+              </div>
+              <div class="card-b"><dl class="kv" id="tdInfo"></dl></div>
+            </div>
+            <div class="card mt12">
+              <div class="card-h"><h3>参数</h3><span class="sub">禁止明文凭据</span></div>
+              <div class="card-b">
+                <div class="io-box"><pre id="tdParams"></pre></div>
+                <div class="small muted" style="margin-top:6px">
+                  参数中的凭据只能引用凭据条目名称，由宿主代持解密；不得写入明文凭据，界面不回显凭据原值。
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 页面：执行记录 / 审计 ========== -->
+      <section class="page" id="page-records">
+        <div class="page-head">
+          <div>
+            <h1>执行记录 / 审计</h1>
+            <p>调用记录与审计事件（CAP-05）。审计日志仅管理员可见。</p>
+          </div>
+          <div class="actions"><button class="btn" onclick="alert('导出接口未开放（待定，OQ-016）')">导出</button></div>
+        </div>
+
+        <div class="tabs" id="recTabs" style="margin-bottom:12px">
+          <div class="tab active" data-rtab="exec" onclick="switchRecTab('exec')">执行记录</div>
+          <div class="tab" data-rtab="audit" id="recAuditTab" style="display:none" onclick="switchRecTab('audit')">审计日志</div>
+        </div>
+
+        <div id="recExecPane">
+          <div class="filters">
+            <label>插件
+              <select id="rcPlugin"><option value="">全部插件</option></select>
+            </label>
+            <label>状态
+              <select id="rcResult">
+                <option value="">全部</option>
+                <option value="ok">成功 ok</option>
+                <option value="error">失败 error</option>
+                <option value="timeout">超时 timeout</option>
+                <option value="skipped">跳过 skipped</option>
+                <option value="missed">错过 missed</option>
+                <option value="interrupted">中断 interrupted</option>
+              </select>
+            </label>
+            <label>来源
+              <select id="rcTrigger">
+                <option value="">全部</option>
+                <option value="manual">手动 manual</option>
+                <option value="scheduled">定时 scheduled</option>
+                <option value="api">API</option>
+              </select>
+            </label>
+            <span class="sep"></span>
+            <label>时间
+              <select id="rcRange">
+                <option value="24">最近 24 小时</option>
+                <option value="1">最近 1 小时</option>
+                <option value="168">最近 7 天</option>
+                <option value="0">全部</option>
+              </select>
+            </label>
+            <label>搜索 <input id="rcSearch" placeholder="主体 / 插件 / 能力 / 任务" style="width:180px"></label>
+            <span class="result" id="rcCount">—</span>
+          </div>
+
+          <div class="card">
+            <div class="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:15%">时间</th>
+                    <th style="width:9%">来源</th>
+                    <th style="width:10%">主体</th>
+                    <th style="width:8%">状态</th>
+                    <th style="width:19%">插件 / 能力</th>
+                    <th style="width:11%">任务</th>
+                    <th class="num" style="width:7%">耗时</th>
+                    <th style="width:10%">错误类别</th>
+                    <th style="width:11%">输出摘要</th>
+                  </tr>
+                </thead>
+                <tbody id="recordRows"></tbody>
+              </table>
+            </div>
+            <div class="card-b" style="border-top:1px solid var(--line-soft);font-size:11.5px;color:var(--muted)">
+              敏感能力只记录摘要或元信息（DOC-03 §6.3）。点击任意行可展开输入 / 输出摘要；未记录的摘要显示「未记录」。
+            </div>
+          </div>
+        </div>
+
+        <div id="recAuditPane" style="display:none">
+          <div id="auDenied" class="notice" style="display:none">
+            无权限：审计日志仅管理员可见（<code>403 permission_denied</code>）。
+          </div>
+          <div id="auBody">
+            <div class="filters">
+              <label>动作 <input id="auAction" placeholder="例如 plugin.enable" style="width:180px"></label>
+              <label>结果
+                <select id="auResult">
+                  <option value="">全部</option>
+                  <option value="success">success</option>
+                  <option value="failure">failure</option>
+                  <option value="denied">denied</option>
+                </select>
+              </label>
+              <label>条数
+                <select id="auLimit">
+                  <option value="100">100</option>
+                  <option value="200">200</option>
+                  <option value="500">500</option>
+                </select>
+              </label>
+              <span class="result" id="auCount">—</span>
+            </div>
+            <div class="card">
+              <div class="tbl-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width:15%">时间</th>
+                      <th style="width:12%">主体</th>
+                      <th style="width:15%">动作</th>
+                      <th style="width:13%">目标</th>
+                      <th style="width:8%">结果</th>
+                      <th style="width:15%">原因</th>
+                      <th>详情</th>
+                    </tr>
+                  </thead>
+                  <tbody id="auditRows"></tbody>
+                </table>
+              </div>
+              <div class="card-b" style="border-top:1px solid var(--line-soft);font-size:11.5px;color:var(--muted)">
+                审计记录只读，插件不可修改（CAP-05）；详情中的敏感字段按 DOC-08 脱敏。
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 页面：凭据管理 ========== -->
+      <section class="page" id="page-credentials">
+        <div class="page-head">
+          <div>
+            <h1>凭据管理</h1>
+            <p>插件访问外部中间件所需的凭据（DOC-08 §2 C 类：最高敏感）</p>
+          </div>
+          <div class="actions">
+            <button class="btn primary" onclick="go('hosts')">前往主机管理</button>
+          </div>
+        </div>
+
+        <div class="notice">
+          <b>存储与展示约束</b>：凭据必须<b>加密存储</b>，仅在调用时按最小权限解密使用；不得进入日志、审计与错误详情；
+          <b>不提供明文导出接口</b>，界面永不回显原值（NFR-SEC-08 / NFR-SEC-09）。凭据以 <b>AES-256-GCM</b> 加密存储，
+          主密钥来自环境变量（优先）或配置文件独立字段，密钥不落库；防护边界为防库文件被单独拷走，不防主机被完全控制。轮换策略 <span class="tbd-inline">TBD</span>。
+        </div>
+
+        <div class="card mt12">
+          <div class="card-b">
+            <div class="empty" style="padding:34px 12px;text-align:center">
+              <div class="small muted" style="margin-bottom:6px">没有独立的凭据库列表</div>
+              <div style="margin-bottom:12px">凭据随主机保存，请在主机编辑中维护。</div>
+              <button class="btn primary" onclick="go('hosts')">前往主机管理</button>
+            </div>
+          </div>
+          <div class="card-b" style="border-top:1px solid var(--line-soft);font-size:11.5px;color:var(--muted)">
+            凭据类数据不向插件直接开放；插件只能在被授权的能力调用中由宿主代持使用（DOC-08 §2）。
+          </div>
+        </div>
+      </section>
+      <!-- ========== 页面：系统设置 ========== -->
+      <section class="page" id="page-settings">
+        <div class="page-head">
+          <div>
+            <h1>系统设置</h1>
+            <p>数据目录、存储信息、版本与配置来源（CAP-03 / CAP-10 / CAP-11）</p>
+          </div>
+          <div class="actions">
+            <button class="btn" onclick="alert('系统设置接口未开放（待定）')">修改配置</button>
+            <button class="btn" onclick="alert('系统设置接口未开放（待定）')">立即备份</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><h3>系统设置</h3><span class="sub">接口未开放</span></div>
+          <div class="card-b">
+            <div class="notice" style="margin-bottom:12px">系统设置接口未开放（待定）：数据目录、存储信息、版本与配置来源均无法通过本期接口读取。</div>
+            <dl class="kv">
+              <dt>数据目录</dt><dd><span class="tbd-inline">TBD（OQ-022）</span></dd>
+              <dt>存储引擎</dt><dd>嵌入式 SQLite（ADR-0007）</dd>
+              <dt>配置来源</dt><dd>命令行 &gt; 环境变量 &gt; 配置文件 <span class="small muted">（<span class="tbd-inline">TBD（OQ-008）</span>）</span></dd>
+              <dt>备份与保留</dt><dd><span class="tbd-inline">TBD（OQ-017）</span></dd>
+              <dt>版本信息</dt><dd><span class="tbd-inline">TBD（未在本期接口契约内）</span></dd>
+              <dt>监听地址 / 端口</dt><dd><span class="tbd-inline">TBD（NFR-DEP-03）</span></dd>
+            </dl>
+          </div>
+        </div>
+      </section>
+
+      <!-- 调用弹层 -->
+      <div id="invokeModal" style="display:none;position:fixed;inset:0;z-index:40;background:rgba(20,28,37,.42);align-items:center;justify-content:center">
+        <div style="width:520px;background:#fff;border-radius:4px;box-shadow:0 20px 50px rgba(0,0,0,.3)">
+          <div class="card-h" style="border-bottom:1px solid var(--line)">
+            <h3>调用能力</h3><span class="sub" id="invokePlugin"></span>
+            <div class="right"><button class="btn sm" onclick="closeInvoke()">关闭</button></div>
+          </div>
+          <div class="card-b">
+            <div class="alert info" style="margin-bottom:10px">所有调用必须经调用网关（CAP-02）：鉴权 → 路由 → 注入上下文 → 超时兜底 → 错误归一。UI 不得绕过网关直连插件。</div>
+            <div class="field"><label>能力</label><select id="invokeCap" style="width:100%;height:32px;border:1px solid #c9d0d8;border-radius:3px;padding:0 8px"></select></div>
+            <div class="field"><label>输入（JSON 对象）</label>
+              <textarea id="invokeInput" style="width:100%;height:96px;border:1px solid #c9d0d8;border-radius:3px;padding:8px;font:12px/1.6 var(--mono);resize:vertical">{}</textarea>
+            </div>
+            <div class="small muted" style="margin-bottom:10px">超时由底座兜底下发（NFR-REL-02），建议值 <span class="tbd-inline">TBD</span>；结果体积上限 <span class="tbd-inline">TBD（OQ-004）</span>。</div>
+            <div id="invokeResult" style="display:none;margin-bottom:10px"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+              <button class="btn" onclick="closeInvoke()">取消</button>
+              <button class="btn primary" onclick="submitInvoke()">执行调用</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 主机新增 / 编辑抽屉 -->
+      <div class="drawer-mask" id="hostDrawerMask" onclick="closeHostDrawer()"></div>
+      <aside class="drawer" id="hostDrawer">
+        <div class="drawer-h">
+          <h3 id="drawerTitle">新增主机</h3>
+          <div class="right"><button class="btn sm" onclick="closeHostDrawer()">关闭</button></div>
+        </div>
+        <div class="drawer-b">
+          <div class="notice" style="margin-bottom:14px">
+            凭据保存后<b>不可回显、不可导出</b>，列表与详情仅展示是否已配置。凭据以 <b>AES-256-GCM</b> 加密存储，
+            主密钥来自环境变量（优先）或配置文件独立字段，密钥不落库。
+          </div>
+          <div class="form-row">
+            <label>主机名称</label>
+            <input id="hfName" type="text" placeholder="例如：应用主机 A">
+          </div>
+          <div style="display:flex;gap:10px">
+            <div class="form-row" style="flex:2">
+              <label>地址</label>
+              <input id="hfAddr" type="text" placeholder="示例：host-a.internal">
+            </div>
+            <div class="form-row" style="flex:1">
+              <label>端口</label>
+              <input id="hfPort" type="text" value="22">
+            </div>
+          </div>
+          <div class="form-row">
+            <label>登录用户名</label>
+            <input id="hfUser" type="text" placeholder="示例：ops">
+          </div>
+          <div class="form-row">
+            <label>认证方式</label>
+            <div class="radio-row">
+              <label><input type="radio" name="hAuth" value="key" checked onchange="renderAuthBlock()"> SSH 密钥</label>
+              <label><input type="radio" name="hAuth" value="password" onchange="renderAuthBlock()"> 账号密码</label>
+            </div>
+          </div>
+          <div id="authBlock"></div>
+          <div class="notice" id="credHint" style="margin-top:4px">
+            编辑主机时凭据字段留空表示<b>不修改</b>；切换认证方式时必须填写新凭据。
+          </div>
+        </div>
+        <div class="drawer-f">
+          <button class="btn" onclick="closeHostDrawer()">取消</button>
+          <button class="btn primary" onclick="saveHost()">保存</button>
+        </div>
+      </aside>
+
+      <!-- 下发到主机弹层 -->
+      <div id="pushModal" style="display:none;position:fixed;inset:0;z-index:47;background:rgba(20,28,37,.42);align-items:center;justify-content:center">
+        <div style="width:560px;background:#fff;border-radius:4px;box-shadow:0 20px 50px rgba(0,0,0,.3)">
+          <div class="card-h" style="border-bottom:1px solid var(--line)">
+            <h3>下发到主机</h3><span class="sub" id="pushPlugin"></span>
+            <div class="right"><button class="btn sm" onclick="closePush()">关闭</button></div>
+          </div>
+          <div class="card-b">
+            <div class="alert info" style="margin-bottom:10px">
+              下发使用主机已保存的凭据，由宿主代持；凭据不回显。下发会为本机创建/更新远端实例，
+              已下发不等于已启动，更不等于可调用（三态独立判定）。
+            </div>
+            <div class="form-row">
+              <label>插件类型（仅 daemon）</label>
+              <select id="pushPluginSel"></select>
+            </div>
+            <div class="form-row">
+              <label>目标主机</label>
+              <select id="pushHostSel"></select>
+              <div class="hint" id="pushHostHint">—</div>
+            </div>
+            <div class="form-row">
+              <label>监听端口（可选）</label>
+              <input id="pushPort" type="text" placeholder="留空使用清单默认 runtime.listen.port">
+              <div class="hint">仅远端 daemon 生效；端口范围为 1-65535，越界或占用由服务端校验。</div>
+            </div>
+            <div id="pushResult" style="display:none"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+              <button class="btn" onclick="closePush()">取消</button>
+              <button class="btn primary" id="pushConfirmBtn" onclick="confirmPush()">确认下发</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 定时任务新增 / 编辑抽屉 -->
+      <div class="drawer-mask" id="taskDrawerMask" onclick="closeTaskDrawer()"></div>
+      <aside class="drawer" id="taskDrawer">
+        <div class="drawer-h">
+          <h3 id="taskDrawerTitle">新建任务</h3>
+          <div class="right"><button class="btn sm" onclick="closeTaskDrawer()">关闭</button></div>
+        </div>
+        <div class="drawer-b">
+          <div class="notice" style="margin-bottom:14px">
+            任务经调用网关执行插件能力，与其他调用一样受鉴权、超时与错误归一约束。
+            错过执行<b>不补跑</b>；参数中<b>禁止写入明文凭据</b>。
+          </div>
+
+          <div class="form-row">
+            <label>任务名称</label>
+            <input id="tfName" type="text" placeholder="例如：主机巡检（日常）">
+          </div>
+          <div class="form-row">
+            <label>描述（可选）</label>
+            <input id="tfDesc" type="text" placeholder="任务用途说明">
+          </div>
+
+          <div class="form-row">
+            <label>执行体 · 实例</label>
+            <select id="tfInstance"></select>
+            <div class="hint" id="tfInstanceHint">实例不可用时仍可保存，但调度执行可能失败；旧任务的本机别名会标注为兼容口径。</div>
+          </div>
+          <div class="form-row">
+            <label>执行体 · 能力</label>
+            <select id="tfCap"></select>
+            <div class="hint" id="tfCapHint">—</div>
+          </div>
+
+          <div class="form-row">
+            <label>触发规则</label>
+            <div class="radio-row">
+              <label><input type="radio" name="tfMode" value="cron" onchange="renderTaskMode()"> cron 表达式</label>
+              <label><input type="radio" name="tfMode" value="interval" checked onchange="renderTaskMode()"> 固定间隔</label>
+            </div>
+          </div>
+
+          <div id="tfCronBlock" style="display:none">
+            <div class="form-row">
+              <label>cron 表达式</label>
+              <input id="tfCron" type="text" class="mono" placeholder="例如：*/30 * * * *">
+              <div class="hint">5 段表达式；语法由服务端校验，非法表达式会返回错误。</div>
+            </div>
+          </div>
+
+          <div id="tfIntervalBlock">
+            <div class="form-row">
+              <label>固定间隔</label>
+              <div style="display:flex;gap:8px">
+                <input id="tfEvery" type="text" value="30" style="width:110px">
+                <select id="tfUnit" style="width:120px">
+                  <option value="60">分钟</option>
+                  <option value="3600">小时</option>
+                  <option value="86400">天</option>
+                </select>
+              </div>
+              <div class="hint">按固定间隔循环触发；错过执行不补跑。</div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label>时区</label>
+            <input id="tfTimezone" type="text" value="Asia/Shanghai" placeholder="Asia/Shanghai">
+            <div class="hint">cron 表达式按该时区解释。</div>
+          </div>
+
+          <div style="display:flex;gap:10px">
+            <div class="form-row" style="flex:1">
+              <label>超时（秒）</label>
+              <input id="tfTimeout" type="text" value="60">
+              <div class="hint">由底座兜底，必须大于 0。</div>
+            </div>
+            <div class="form-row" style="flex:1">
+              <label>失败重试次数</label>
+              <input id="tfRetry" type="text" value="0">
+              <div class="hint">0 表示不重试。</div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label>并发策略</label>
+            <select id="tfOverlap">
+              <option value="skip">skip：上次未结束时跳过本次</option>
+            </select>
+            <div class="hint">当前仅支持 skip；跳过不补跑。</div>
+          </div>
+
+          <div class="form-row">
+            <label>参数（JSON 对象）</label>
+            <textarea id="tfParams" placeholder='{ "target": "host-01" }'>{}</textarea>
+            <div class="hint">
+              参数中<b>禁止明文凭据</b>；必须为合法 JSON 对象。
+            </div>
+          </div>
+        </div>
+        <div class="drawer-f">
+          <button class="btn" onclick="closeTaskDrawer()">取消</button>
+          <button class="btn primary" onclick="saveTask()">保存</button>
+        </div>
+      </aside>
+
+    </main>
+  </div>
+</div>
+<script>
+'use strict';
+
+/* ============================================================
+   M5 控制台：全部数据来自真实接口，不保留任何演示数据常量。
+   ============================================================ */
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+const state = {
+  user: null,
+  plugins: [],
+  pluginDetails: {},
+  pluginWarnings: [],
+  pluginConflicts: [],
+  pluginsLoaded: false,
+  types: [],
+  typesLoaded: false,
+  instances: [],
+  instancesLoaded: false,
+  hostInstances: {},
+  hostInstanceErr: {},
+  instanceDetails: {},
+  probes: {},
+  hosts: [],
+  dists: {},
+  hostsLoaded: false,
+  tasks: [],
+  taskLast: {},
+  missed: {},
+  tasksLoaded: false,
+  executions: [],
+  recent: [],
+  overview: null,
+  audit: [],
+  auditLoaded: false,
+  recTab: 'exec'
+};
+
+let currentInstanceId = '';
+let currentHostId = '';
+let currentTaskId = '';
+let editingHostId = '';
+let editingTaskId = '';
+let hostSel = new Set();
+let batchRun = null;
+let pushPollTimer = null;
+let recordRowsData = [];
+
+const EXEC_STATUS = {
+  ok: { label: '成功', cls: 'ok' },
+  error: { label: '失败', cls: 'bad' },
+  timeout: { label: '超时', cls: 'warn' },
+  skipped: { label: '跳过', cls: 'gray' },
+  missed: { label: '错过', cls: 'warn' },
+  interrupted: { label: '中断', cls: 'bad' }
+};
+const SOURCE_LABEL = { manual: '手动', scheduled: '定时任务', api: 'API' };
+const HOST_STATUS = {
+  unknown: { label: '未测试', cls: 'gray' },
+  reachable: { label: '可达', cls: 'ok' },
+  unreachable: { label: '不可达', cls: 'bad' },
+  fingerprint_mismatch: { label: '指纹不匹配', cls: 'warn' }
+};
+const TASK_STATE = {
+  enabled: { label: '启用中', cls: 'ok' },
+  paused: { label: '已暂停', cls: 'gray' },
+  unavailable: { label: '不可用', cls: 'warn' }
+};
+const DIST_STATE = {
+  queued: { label: '待下发', cls: 'gray' },
+  connecting: { label: '连接中', cls: 'warn' },
+  uploading: { label: '上传中', cls: 'warn' },
+  verifying: { label: '校验中', cls: 'warn' },
+  installing: { label: '安装中', cls: 'warn' },
+  installed: { label: '已安装', cls: 'ok' },
+  starting: { label: '启动中', cls: 'warn' },
+  started: { label: '已启动', cls: 'ok' },
+  start_failed: { label: '启动失败', cls: 'bad' },
+  callable: { label: '可调用', cls: 'ok' },
+  failed: { label: '失败', cls: 'bad' },
+  interrupted: { label: '中断', cls: 'bad' },
+  cancelled: { label: '已取消', cls: 'gray' }
+};
+const INSTANCE_STATE = {
+  installed: { label: '已安装', cls: 'info' },
+  started: { label: '已启动', cls: 'info' },
+  callable: { label: '可调用', cls: 'ok' },
+  start_failed: { label: '启动失败', cls: 'bad' },
+  stop_failed: { label: '停止失败', cls: 'bad' },
+  drifted: { label: '漂移', cls: 'bad' },
+  unknown: { label: '未知', cls: 'warn' },
+  disabled: { label: '已停用', cls: 'gray' },
+  revoked: { label: '已撤销', cls: 'bad' }
+};
+const CUSTODY_LABEL = { local: '本机', remote: '远端' };
+const DRIFT_LABEL = {
+  package_missing: '包缺失',
+  version_mismatch: '版本不一致',
+  cert_mismatch: '证书不匹配',
+  unit_missing: 'unit 缺失'
+};
+const AUDIT_RESULT = {
+  success: { label: 'success', cls: 'ok' },
+  failure: { label: 'failure', cls: 'bad' },
+  denied: { label: 'denied', cls: 'warn' }
+};
+const TERMINAL_DIST = new Set(['installed', 'callable', 'start_failed', 'failed', 'interrupted', 'cancelled']);
+
+const PAGE_TITLE = {
+  overview: '总览',
+  plugins: '插件管理',
+  'plugin-detail': '实例详情',
+  hosts: '主机管理',
+  'host-detail': '主机详情',
+  tasks: '定时任务',
+  'task-detail': '任务详情',
+  records: '执行记录 / 审计',
+  credentials: '凭据管理',
+  settings: '系统设置'
+};
+
+/* ---- 基础工具 ---- */
+function esc(v) {
+  return String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+function arg(v) { return esc(v); }
+function setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
+function setHTML(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; }
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+function fmtTime(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return String(v);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+}
+function fmtShort(v) {
+  const s = fmtTime(v);
+  return s === '—' ? '—' : s.slice(5, 16);
+}
+function validTime(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  if (isNaN(d.getTime()) || d.getFullYear() < 1970) return null;
+  return d;
+}
+function fmtTimeSafe(v) {
+  return validTime(v) ? fmtTime(v) : '—';
+}
+function boolTag(v) {
+  return v ? '<span class="tag ok" style="height:18px">true</span>' : '<span class="tag gray" style="height:18px">false</span>';
+}
+function fmtDur(ms) {
+  if (ms === null || ms === undefined || ms === '') return '—';
+  const n = Number(ms);
+  if (isNaN(n)) return '—';
+  return n < 1000 ? `${n} ms` : `${(n / 1000).toFixed(2)} s`;
+}
+function statusTag(status, map) {
+  const m = (map && map[status]) || { label: status || '—', cls: 'gray' };
+  return `<span class="tag ${m.cls}"><span class="d"></span>${esc(m.label)}</span>`;
+}
+function jsonText(v) {
+  if (v === null || v === undefined || v === '') return '未记录';
+  try { return typeof v === 'string' ? v : JSON.stringify(v, null, 2); }
+  catch (e) { return String(v); }
+}
+function summaryText(v) {
+  if (v === null || v === undefined || v === '') return '未记录';
+  const s = typeof v === 'string' ? v : jsonText(v);
+  return s.length > 240 ? s.slice(0, 240) + '…' : s;
+}
+function errText(e) {
+  if (!e) return '未知错误';
+  return `${e.code ? e.code + ' · ' : ''}${e.message || '请求失败'}`;
+}
+function alertErr(e) { alert('操作失败：' + errText(e)); }
+
+function loadingRow(tbodyId, colspan, text) {
+  setHTML(tbodyId, `<tr><td colspan="${colspan}" style="padding:22px;text-align:center;color:var(--muted)">${esc(text || '加载中…')}</td></tr>`);
+}
+function errorRow(tbodyId, colspan, err, retryJs) {
+  const btn = retryJs ? ` <button class="btn sm" onclick="${retryJs}">重试</button>` : '';
+  setHTML(tbodyId, `<tr><td colspan="${colspan}" style="padding:22px;text-align:center">
+    <div style="color:#a8322c;margin-bottom:8px">加载失败：<code>${esc(err && err.code)}</code> ${esc(err && err.message)}</div>${btn}
+  </td></tr>`);
+}
+function emptyRow(tbodyId, colspan, text) {
+  setHTML(tbodyId, `<tr><td colspan="${colspan}" style="padding:24px;text-align:center;color:var(--muted)">${esc(text)}</td></tr>`);
+}
+
+/* ---- 接口层 ---- */
+async function api(path, opts = {}) {
+  const method = opts.method || 'GET';
+  const headers = {};
+  if (method !== 'GET') {
+    headers['X-Ops-Request'] = '1';
+    if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+  }
+  let res;
+  try {
+    res = await fetch(path, {
+      method,
+      credentials: 'same-origin',
+      headers,
+      body: opts.body === undefined ? undefined : JSON.stringify(bodyFor(opts.body))
+    });
+  } catch (e) {
+    const err = new Error('网络请求失败：' + e.message);
+    err.code = 'network_error';
+    throw err;
+  }
+  const text = await res.text();
+  let data = null;
+  if (text) {
+    try { data = JSON.parse(text); } catch (e) { data = null; }
+  }
+  if (!res.ok) {
+    const info = (data && data.error) || {};
+    const err = new Error(info.message || `请求失败（HTTP ${res.status}）`);
+    err.status = res.status;
+    err.code = info.code || `http_${res.status}`;
+    err.details = info.details;
+    err.body = data;
+    if (res.status === 401 && !opts.noAuthRedirect) {
+      showLogin('会话已过期，请重新登录');
+    }
+    throw err;
+  }
+  return data;
+}
+function bodyFor(body) {
+  // 允许调用方显式传 null 表示无 body；对象原样序列化。
+  return body === null ? undefined : body;
+}
+
+/* ---- 登录与会话 ---- */
+function showLogin(msg) {
+  ['invokeModal', 'pushModal'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  ['hostDrawer', 'hostDrawerMask', 'taskDrawer', 'taskDrawerMask'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('open'); });
+  const login = document.getElementById('login');
+  const app = document.getElementById('app');
+  if (login) login.style.display = 'flex';
+  if (app) app.classList.remove('on');
+  const err = document.getElementById('loginErr');
+  if (err) {
+    err.textContent = msg || '';
+    err.style.display = msg ? 'block' : 'none';
+  }
+  const pwd = document.getElementById('pwd');
+  if (pwd) pwd.value = '';
+}
+function showApp() {
+  const login = document.getElementById('login');
+  const app = document.getElementById('app');
+  if (login) login.style.display = 'none';
+  if (app) app.classList.add('on');
+}
+function roleLabel(role) {
+  return ({ admin: '管理员', operator: '运维', viewer: '只读' })[role] || role || '—';
+}
+function applyUser() {
+  const u = state.user || {};
+  const name = u.username || u.display_name || '—';
+  setText('userName', name);
+  setText('userRole', roleLabel(u.role));
+  const av = document.getElementById('userAvatar');
+  if (av) av.textContent = (u.display_name || u.username || '—').slice(0, 2).toUpperCase();
+  const tab = document.getElementById('recAuditTab');
+  if (tab) tab.style.display = isAdmin() ? '' : 'none';
+  if (!isAdmin() && state.recTab === 'audit') switchRecTab('exec');
+}
+function isAdmin() { return !!(state.user && state.user.role === 'admin'); }
+
+async function bootstrap() {
+  try {
+    const d = await api('/api/auth/session', { noAuthRedirect: true });
+    state.user = d.user;
+    applyUser();
+    showApp();
+    await loadAll();
+  } catch (e) {
+    if (e.status === 401) showLogin('请登录后继续');
+    else showLogin('无法连接服务端：' + e.message);
+  }
+}
+
+async function doLogin(ev) {
+  if (ev) ev.preventDefault();
+  const acct = (document.getElementById('acct') || {}).value || '';
+  const pwd = (document.getElementById('pwd') || {}).value || '';
+  const btn = document.getElementById('loginBtn');
+  const err = document.getElementById('loginErr');
+  if (!acct || !pwd) {
+    if (err) { err.textContent = '请输入账号与口令'; err.style.display = 'block'; }
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = '登录中…'; }
+  try {
+    const d = await api('/api/auth/login', { method: 'POST', body: { username: acct, password: pwd }, noAuthRedirect: true });
+    state.user = d.user;
+    if (err) err.style.display = 'none';
+    applyUser();
+    showApp();
+    await loadAll();
+  } catch (e) {
+    const msg = e.status === 429 ? '登录尝试过于频繁，请稍后再试' :
+      e.status === 401 ? '账号或口令不正确' : errText(e);
+    if (err) { err.textContent = msg; err.style.display = 'block'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '登 录'; }
+  }
+}
+
+async function doLogout() {
+  try { await api('/api/auth/logout', { method: 'POST', body: {} }); }
+  catch (e) { /* 会话已失效时同样回到登录页 */ }
+  state.user = null;
+  showLogin('已退出登录');
+}
+
+/* ---- 通用加载 ---- */
+async function loadAll() {
+  if (!state.user) return;
+  await Promise.allSettled([
+    loadOverview(),
+    loadPlugins(),
+    loadPluginTypes(),
+    loadInstances(),
+    loadHosts(),
+    loadTasks(),
+    loadExecutions()
+  ]);
+  if (state.recTab === 'audit' && isAdmin()) loadAudit();
+}
+
+function go(page) {
+  $$('.page').forEach(el => el.classList.remove('on'));
+  const el = document.getElementById('page-' + page);
+  if (el) el.classList.add('on');
+  $$('.nav-item').forEach(n => n.classList.toggle('active',
+    n.dataset.page === page || (page === 'plugin-detail' && n.dataset.page === 'plugins') ||
+    (page === 'host-detail' && n.dataset.page === 'hosts') ||
+    (page === 'task-detail' && n.dataset.page === 'tasks')));
+  setText('crumbPage', PAGE_TITLE[page] || '');
+  const content = document.querySelector('.content');
+  if (content) content.scrollTop = 0;
+}
+
+/* ---- 总览 ---- */
+function refreshOverview() {
+  loadOverview();
+  loadPlugins();
+  loadPluginTypes();
+  loadInstances();
+  loadHosts();
+  loadTasks();
+  loadExecutions();
+}
+
+async function loadOverview() {
+  let ov = null;
+  try { ov = await api('/api/overview'); }
+  catch (e) { state.overview = null; renderOverview(e); return; }
+  state.overview = ov;
+  try {
+    const ex = await api('/api/executions?limit=5');
+    state.recent = ex.executions || [];
+  } catch (e) {
+    state.recent = [];
+  }
+  renderOverview();
+}
+
+function renderOverview(err) {
+  const ov = state.overview;
+  const setKpi = (id, html) => setHTML(id, html);
+
+  if (ov) {
+    setKpi('kpiPlugins', `${ov.plugins.total} <small>个</small>`);
+    setKpi('kpiPluginEnabled', `${ov.plugins.enabled} <small>/ ${ov.plugins.disabled} 个</small>`);
+    setKpi('kpiExec24', `${ov.executions_24h.total} <small>次 · 失败 ${ov.executions_24h.failed}</small>`);
+    setKpi('kpiHosts', `${ov.hosts.total} <small>台</small>`);
+    const bad = Math.max(0, ov.hosts.total - ov.hosts.reachable);
+    setKpi('kpiHostsBad', `${bad} <small>台</small>`);
+    setKpi('kpiHostPlugins', `${ov.distributions.installed} <small>个</small>`);
+    setKpi('kpiPushFail', '— <small>次</small>');
+    setKpi('kpiTasksOn', `${ov.tasks.enabled} <small>个</small>`);
+    setKpi('kpiTaskRuns', `${ov.executions_24h.total} <small>次</small>`);
+    setKpi('kpiTaskFails', `${ov.executions_24h.failed} <small>次</small>`);
+    setText('kpiTasksOnHint', `共 ${ov.tasks.total} 个 · 暂停 ${ov.tasks.paused} · 不可用 ${ov.tasks.unavailable}`);
+
+    // 分布条：接口只提供已启用/已禁用插件数，按真实计数绘制。
+    const total = ov.plugins.total || 0;
+    const bars = [];
+    const legend = [];
+    if (ov.plugins.enabled > 0) {
+      bars.push(`<i style="width:${(ov.plugins.enabled / total * 100).toFixed(2)}%;background:#2f7a52"></i>`);
+    }
+    if (ov.plugins.disabled > 0) {
+      bars.push(`<i style="width:${(ov.plugins.disabled / total * 100).toFixed(2)}%;background:#aeb8c2"></i>`);
+    }
+    legend.push(`<span><span class="sq" style="background:#2f7a52"></span>已启用 <b class="mono">${ov.plugins.enabled}</b></span>`);
+    legend.push(`<span><span class="sq" style="background:#aeb8c2"></span>已禁用 <b class="mono">${ov.plugins.disabled}</b></span>`);
+    setHTML('distBar', bars.join('') || '<i style="width:100%;background:#e6ebf0"></i>');
+    setHTML('distLegend', legend.join(''));
+  } else {
+    ['kpiPlugins', 'kpiPluginEnabled', 'kpiExec24', 'kpiHosts', 'kpiHostsBad', 'kpiHostPlugins', 'kpiTasksOn', 'kpiTaskRuns', 'kpiTaskFails'].forEach(id => {
+      setHTML(id, '—');
+    });
+    setHTML('kpiPushFail', '— <small>次</small>');
+    setText('kpiTasksOnHint', '—');
+    setHTML('distBar', '<i style="width:100%;background:#e6ebf0"></i>');
+    setHTML('distLegend', '<span class="muted">—</span>');
+  }
+
+  // 下一个任务：仅在任务列表已加载时计算，避免臆造。
+  const nextTask = (state.tasks || [])
+    .filter(t => t.state === 'enabled' && t.next_run_at)
+    .sort((a, b) => new Date(a.next_run_at) - new Date(b.next_run_at))[0];
+  if (nextTask) {
+    setText('kpiTaskNext', fmtShort(nextTask.next_run_at));
+    setText('kpiTaskNextHint', `${nextTask.name} · ${nextTask.plugin_id}`);
+  } else {
+    setText('kpiTaskNext', '—');
+    setText('kpiTaskNextHint', state.tasksLoaded ? '没有已启用且带下次执行时间的任务' : '任务列表加载中…');
+  }
+
+  // 插件简表
+  if (!state.pluginsLoaded) {
+    loadingRow('overviewPluginRows', 5, '插件数据加载中…');
+  } else if (!state.plugins.length) {
+    emptyRow('overviewPluginRows', 5, '暂无插件');
+  } else {
+    setHTML('overviewPluginRows', state.plugins.slice(0, 5).map(p => `
+      <tr>
+        <td><span class="pl-name" onclick="showTypeInstances('${arg(p.plugin_id)}')">${esc(pluginName(p))}</span><span class="pl-id">${esc(p.plugin_id)}</span></td>
+        <td class="small">${esc(formLabel(p.form))}</td>
+        <td class="mono">${esc(p.plugin_version || '—')}</td>
+        <td>${statusTag(p.state, { enabled: { label: '已启用', cls: 'ok' }, disabled: { label: '已禁用', cls: 'gray' } })}</td>
+        <td class="num">${(p.capabilities || []).length}</td>
+      </tr>`).join(''));
+  }
+
+  // 最近执行
+  if (state.recent.length) {
+    setHTML('overviewRecent', state.recent.slice(0, 5).map(r => `
+      <div class="ev">
+        <span class="t">${esc(fmtShort(r.started_at))}</span>
+        <span class="who"><b>${esc(SOURCE_LABEL[r.source] || r.source || '—')}</b> <em>${esc(r.plugin_id)}</em> <em>${esc(r.capability_id)}</em></span>
+        <span class="tag ${(EXEC_STATUS[r.status] || {}).cls || 'gray'}" style="height:18px">${esc((EXEC_STATUS[r.status] || {}).label || r.status || '—')}</span>
+        <span class="mono small muted">${esc(fmtDur(r.duration_ms))}</span>
+      </div>`).join(''));
+  } else {
+    setHTML('overviewRecent', `<div class="empty" style="padding:18px 0;color:var(--muted)">${err ? '最近执行加载失败' : '暂无执行记录'}</div>`);
+  }
+
+  // 告警：只基于真实返回值拼装。
+  const alerts = [];
+  if (err) {
+    alerts.push({ cls: 'bad', html: `总览加载失败：<code>${esc(err.code)}</code> ${esc(err.message)} <button class="btn sm" onclick="loadOverview()">重试</button>` });
+  }
+  if (state.pluginConflicts && state.pluginConflicts.length) {
+    alerts.push({ cls: 'bad', html: `插件清单冲突 <b>${state.pluginConflicts.length}</b> 项：${esc(state.pluginConflicts.slice(0, 3).map(String).join('；'))}` });
+  }
+  if (state.pluginWarnings && state.pluginWarnings.length) {
+    alerts.push({ cls: 'warn', html: `插件清单警告 <b>${state.pluginWarnings.length}</b> 项：${esc(state.pluginWarnings.slice(0, 3).map(String).join('；'))}` });
+  }
+  if (state.hostsLoaded) {
+    const badHosts = state.hosts.filter(h => h.status === 'unreachable' || h.status === 'fingerprint_mismatch');
+    if (badHosts.length) {
+      alerts.push({ cls: 'warn', html: `主机异常 <b>${badHosts.length}</b> 台：${esc(badHosts.slice(0, 3).map(h => h.name + '（' + ((HOST_STATUS[h.status] || {}).label || h.status) + '）').join('；'))} <a href="#" onclick="go('hosts');return false">前往主机管理 →</a>` });
+    }
+  }
+  if (state.overview && state.overview.tasks.missed_7d > 0) {
+    alerts.push({ cls: 'warn', html: `近 7 天错过执行 <b>${state.overview.tasks.missed_7d}</b> 次；<b>错过执行不补跑</b>。` });
+  }
+  if (!alerts.length && ov) {
+    alerts.push({ cls: 'info', html: '当前没有需要处理的告警。' });
+  }
+  if (!alerts.length) {
+    alerts.push({ cls: 'info', html: err ? '总览不可用。' : '总览数据加载中…' });
+  }
+  setHTML('overviewAlerts', alerts.map(a => `
+    <div class="alert ${a.cls}" style="margin-bottom:8px">
+      <span>${a.cls === 'bad' ? '■' : (a.cls === 'warn' ? '▲' : '■')}</span>
+      <div>${a.html}</div>
+      <span class="x" onclick="this.closest('.alert').remove()">✕</span>
+    </div>`).join(''));
+}
+
+/* ---- 插件 ---- */
+function normalizeForm(f) {
+  const s = String(f || '').toLowerCase();
+  if (s === 'command') return 'command';
+  if (s === 'persistent' || s === 'daemon') return 'persistent';
+  return s;
+}
+function formLabel(f) {
+  const n = normalizeForm(f);
+  if (n === 'command') return '命令式';
+  if (n === 'persistent') return '常驻式';
+  return f || '—';
+}
+function formTag(f) {
+  const n = normalizeForm(f);
+  const cls = n === 'command' ? 'form' : 'gray';
+  return `<span class="tag ${cls}">${esc(formLabel(f))}</span>`;
+}
+function typeOf(typeId) {
+  return (state.types || []).find(t => t.type_id === typeId) || null;
+}
+function typeName(typeId) {
+  const t = typeOf(typeId);
+  return (t && t.display_name) || typeId || '—';
+}
+function custodyLabel(c) { return CUSTODY_LABEL[c] || c || '—'; }
+function hostOf(hostId) { return (state.hosts || []).find(h => h.host_id === hostId) || null; }
+function hostLabel(hostId) {
+  const h = hostOf(hostId);
+  return h ? h.name : (hostId || '—');
+}
+function threeStateTags(inst) {
+  const t = (val, label) => `<span class="tag ${val ? 'ok' : 'gray'}" style="height:18px;margin-right:3px">${label}</span>`;
+  return t(inst.installed, '已安装') + t(inst.started, '已启动') + t(inst.callable, '可调用');
+}
+// 下发记录的三态字段是 started_ok（实例视图为 started），字段名不同，不能混用。
+function distThreeStateTags(d) {
+  const t = (val, label) => `<span class="tag ${val ? 'ok' : 'gray'}" style="height:18px;margin-right:3px">${label}</span>`;
+  return t(d.installed, '已安装') + t(d.started_ok, '已启动') + t(d.callable, '可调用');
+}
+// 实例不可用原因；空串表示可被任务选择与调度。
+function instanceUnavailable(inst) {
+  if (!inst) return '实例未登记';
+  if (inst.state === 'revoked') return '已撤销下发';
+  if (!inst.installed) return '未安装';
+  if (inst.drift) return '漂移：' + (DRIFT_LABEL[inst.drift] || inst.drift);
+  if (!inst.enabled) return '未启用';
+  if (inst.state === 'start_failed') return '启动失败';
+  if (inst.state === 'stop_failed') return '停止失败';
+  if (inst.state === 'unknown') return '状态未知（探测过期或失败）';
+  if (!inst.callable) return '不可调用（' + ((INSTANCE_STATE[inst.state] || {}).label || inst.state || '未知') + '）';
+  return '';
+}
+function pluginDetail(id) {
+  const t = typeOf(id);
+  if (t) return { manifest: { identity: { display_name: t.display_name, description: t.description } } };
+  return state.pluginDetails[id] || null;
+}
+function pluginName(p) {
+  const t = typeOf(p.plugin_id);
+  if (t && t.display_name) return t.display_name;
+  const d = pluginDetail(p.plugin_id);
+  return (d && d.manifest && d.manifest.identity && d.manifest.identity.display_name) || p.plugin_id;
+}
+function pluginDesc(p) {
+  const t = typeOf(p.plugin_id);
+  if (t && t.description) return t.description;
+  const d = pluginDetail(p.plugin_id);
+  return (d && d.manifest && d.manifest.identity && d.manifest.identity.description) || '';
+}
+function isOn(p) { return p.state === 'enabled'; }
+
+function populateRecordPluginFilter() {
+  const sel = document.getElementById('rcPlugin');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">全部插件</option>' + state.plugins.map(p =>
+    `<option value="${arg(p.plugin_id)}">${esc(pluginName(p))}（${esc(p.plugin_id)}）</option>`).join('');
+  if (cur) sel.value = cur;
+}
+
+async function loadPlugins() {
+  // /api/plugins 保留为本机实例别名：只用于总览、执行记录筛选与旧任务兼容，不再是页面唯一实体。
+  try {
+    const d = await api('/api/plugins');
+    state.plugins = d.plugins || [];
+    state.pluginWarnings = d.warnings || [];
+    state.pluginConflicts = d.conflicts || [];
+    state.pluginsLoaded = true;
+    populateRecordPluginFilter();
+    renderOverview();
+  } catch (e) {
+    state.pluginsLoaded = false;
+    state.pluginWarnings = [];
+    state.pluginConflicts = [];
+    renderOverview();
+  }
+}
+
+function refreshPlugins() {
+  loadPlugins();
+  loadPluginTypes();
+  loadInstances();
+  loadOverview();
+}
+
+async function loadPluginTypes() {
+  loadingRow('typeRows', 8, '类型目录加载中…');
+  setText('typeCount', '加载中…');
+  try {
+    const d = await api('/api/plugin-types');
+    state.types = d.types || [];
+    state.typesLoaded = true;
+    renderTypeRows();
+    populateInstanceTypeFilter();
+    populateRecordPluginFilter();
+    setText('navPluginCnt', String(state.types.length));
+    if (state.instancesLoaded) renderInstanceRows();
+    renderTasks();
+  } catch (e) {
+    state.typesLoaded = false;
+    errorRow('typeRows', 8, e, 'loadPluginTypes()');
+    setText('typeCount', '加载失败');
+  }
+}
+
+async function loadInstances() {
+  loadingRow('instanceRows', 8, '实例加载中…');
+  setText('instCount', '加载中…');
+  // 拉取全量后在前端过滤，保证任务抽屉与主机页拿到完整实例集（后者另有 host_id 过滤接口）。
+  try {
+    const d = await api('/api/plugin-instances');
+    state.instances = d.instances || [];
+    state.instancesLoaded = true;
+    renderInstanceRows();
+    renderTasks();
+    if (currentHostId) renderHostDetail(currentHostId);
+  } catch (e) {
+    state.instancesLoaded = false;
+    errorRow('instanceRows', 8, e, 'loadInstances()');
+    setText('instCount', '加载失败');
+  }
+}
+
+function populateInstanceTypeFilter() {
+  const sel = document.getElementById('instType');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">全部类型</option>' + (state.types || []).map(t =>
+    `<option value="${arg(t.type_id)}">${esc(t.display_name || t.type_id)}（${esc(t.type_id)}）</option>`).join('');
+  if (cur) sel.value = cur;
+}
+function populateInstanceHostFilter() {
+  const sel = document.getElementById('instHost');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">全部主机</option>' + (state.hosts || []).map(h =>
+    `<option value="${arg(h.host_id)}">${esc(h.name)}（${esc(h.host_id)}）</option>`).join('');
+  if (cur) sel.value = cur;
+}
+
+function renderTypeRows() {
+  const q = ((document.getElementById('typeSearch') || {}).value || '').trim().toLowerCase();
+  if (!state.typesLoaded) {
+    loadingRow('typeRows', 8, '类型目录加载中…');
+    setText('typeCount', '—');
+    return;
+  }
+  const rows = (state.types || []).filter(t => {
+    if (!q) return true;
+    const caps = (t.capabilities || []).map(c => c.capability_id).join(' ');
+    return [t.type_id, t.display_name, t.description, t.latest_version, caps].join(' ').toLowerCase().includes(q);
+  });
+  if (!rows.length) {
+    emptyRow('typeRows', 8, state.types.length ? '没有符合关键词的类型' : '暂无类型：先在右上角扫描插件包');
+  } else {
+    setHTML('typeRows', rows.map(t => {
+      const caps = t.capabilities || [];
+      return `<tr>
+        <td><span class="pl-name" onclick="showTypeInstances('${arg(t.type_id)}')">${esc(t.display_name || t.type_id)}</span><span class="pl-id">${esc(t.type_id)}</span></td>
+        <td>${formTag(t.form)}</td>
+        <td><span class="tag ${t.custody === 'remote' ? 'form' : 'gray'}">${esc(custodyLabel(t.custody))}</span></td>
+        <td class="mono small">${esc(t.latest_version || '—')}</td>
+        <td class="mono small">${esc(t.contract_version || '—')}<div class="muted">${esc(t.contract_range || '')}</div></td>
+        <td class="num">${caps.length}</td>
+        <td class="num">${esc(t.instance_count || 0)}</td>
+        <td><button class="link" onclick="showTypeInstances('${arg(t.type_id)}')">查看实例 →</button></td>
+      </tr>`;
+    }).join(''));
+  }
+  setText('typeCount', `共 ${rows.length} 个类型`);
+}
+
+function showTypeInstances(typeId) {
+  go('plugins');
+  const sel = document.getElementById('instType');
+  if (sel && typeId) {
+    if (!Array.from(sel.options).some(o => o.value === typeId)) {
+      sel.insertAdjacentHTML('beforeend', `<option value="${arg(typeId)}">${esc(typeName(typeId))}（${esc(typeId)}）</option>`);
+    }
+    sel.value = typeId;
+  }
+  const search = document.getElementById('instSearch');
+  if (search) search.value = '';
+  loadInstances().then(() => {
+    const el = document.getElementById('instanceRows');
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
+function renderInstanceRows() {
+  const q = ((document.getElementById('instSearch') || {}).value || '').trim().toLowerCase();
+  const typeId = (document.getElementById('instType') || {}).value || '';
+  const hostId = (document.getElementById('instHost') || {}).value || '';
+  const stateVal = (document.getElementById('instState') || {}).value || '';
+  if (!state.instancesLoaded) {
+    loadingRow('instanceRows', 8, '实例加载中…');
+    setText('instCount', '—');
+    setText('instFilterCount', '—');
+    return;
+  }
+  const rows = (state.instances || []).filter(inst => {
+    if (typeId && inst.type_id !== typeId) return false;
+    if (hostId && inst.host_id !== hostId) return false;
+    if (stateVal && inst.state !== stateVal) return false;
+    if (!q) return true;
+    return [inst.instance_id, inst.type_id, typeName(inst.type_id), inst.host_id, hostLabel(inst.host_id),
+      inst.custody, inst.state, inst.package_version].join(' ').toLowerCase().includes(q);
+  });
+  if (!rows.length) {
+    emptyRow('instanceRows', 8, state.instances.length
+      ? '没有符合筛选条件的实例'
+      : '暂无实例：本机实例在扫描插件包后自动登记；远端实例需在主机详情下发插件类型');
+  } else {
+    setHTML('instanceRows', rows.map(inst => {
+      const drift = inst.drift ? `<div class="small" style="color:#a8322c">漂移：${esc(DRIFT_LABEL[inst.drift] || inst.drift)}</div>` : '';
+      const reason = inst.state_reason || inst.last_error || '';
+      const probe = validTime(inst.last_probe_at)
+        ? `<div>${esc(fmtShort(inst.last_probe_at))}</div><div class="small muted">${esc(inst.last_probe_result || '—')}</div>`
+        : '<span class="small muted">尚未探测</span>';
+      const canToggle = inst.installed && !inst.drift && inst.state !== 'revoked';
+      return `<tr>
+        <td><span class="pl-name" onclick="openInstance('${arg(inst.instance_id)}')">${esc(typeName(inst.type_id))}</span><span class="pl-id">${esc(inst.instance_id)}</span></td>
+        <td class="small mono">${esc(inst.type_id)}</td>
+        <td class="small">${esc(custodyLabel(inst.custody))}${inst.host_id ? `<div class="muted mono" style="font-size:10.5px">${esc(hostLabel(inst.host_id))}</div>` : ''}</td>
+        <td class="mono small">${esc(inst.package_version || '—')}</td>
+        <td>${threeStateTags(inst)}</td>
+        <td>${statusTag(inst.state, INSTANCE_STATE)}${drift}${reason ? `<div class="small muted" title="${esc(reason)}">${esc(summaryText(reason))}</div>` : ''}</td>
+        <td><label class="switch"><input type="checkbox" ${inst.enabled ? 'checked' : ''} ${canToggle ? '' : 'disabled'} onchange="toggleInstance('${arg(inst.instance_id)}', this.checked)"><span></span></label></td>
+        <td class="small">${probe}</td>
+      </tr>`;
+    }).join(''));
+  }
+  setText('instCount', `共 ${rows.length} 个实例`);
+  setText('instFilterCount', `共 ${rows.length} 个实例`);
+  setText('navPluginCnt', String((state.types || []).length || rows.length));
+}
+
+function mergeInstanceRow(d) {
+  if (!d || !d.instance_id) return;
+  const row = {
+    instance_id: d.instance_id, type_id: d.type_id, host_id: d.host_id, custody: d.custody,
+    package_version: d.package_version, listen_port: d.listen_port, enabled: d.enabled,
+    installed: d.installed, started: d.started, callable: d.callable, state: d.state,
+    state_reason: d.state_reason, drift: d.drift, cert_serial: d.cert_serial,
+    cert_fingerprint: d.cert_fingerprint, cert_not_after: d.cert_not_after,
+    last_probe_at: d.last_probe_at, last_probe_result: d.last_probe_result,
+    last_probe_reason: d.last_probe_reason, last_error: d.last_error,
+    created_at: d.created_at, updated_at: d.updated_at
+  };
+  const i = state.instances.findIndex(x => x.instance_id === d.instance_id);
+  if (i >= 0) state.instances[i] = Object.assign({}, state.instances[i], row);
+  else state.instances.push(row);
+}
+
+function currentInstanceHost() {
+  const d = state.instanceDetails[currentInstanceId];
+  return d && d.host_id ? d.host_id : '';
+}
+
+async function openInstance(id) {
+  currentInstanceId = id;
+  go('plugin-detail');
+  const cached = state.instances.find(x => x.instance_id === id);
+  if (cached) renderInstanceDetail(cached);
+  else {
+    setText('iName', id);
+    setHTML('iState', '<div class="small muted">实例详情加载中…</div>');
+  }
+  setHTML('iProbes', '<div class="small muted">探测历史加载中…</div>');
+  try {
+    const d = await api('/api/plugin-instances/' + encodeURIComponent(id));
+    state.instanceDetails[id] = d;
+    mergeInstanceRow(d);
+    renderInstanceDetail(d);
+    loadInstanceProbes(id);
+  } catch (e) {
+    setHTML('iState', `<div class="alert bad"><span>■</span><div>实例详情加载失败：<code>${esc(e.code)}</code> ${esc(e.message)} <button class="btn sm" onclick="openInstance('${arg(id)}')">重试</button></div></div>`);
+  }
+}
+
+function renderInstanceDetail(d) {
+  if (!d) return;
+  const t = d.type || typeOf(d.type_id);
+  const name = (t && t.display_name) || typeName(d.type_id) || d.instance_id;
+  setText('iName', name);
+  setHTML('iMeta', `${statusTag(d.state, INSTANCE_STATE)} <span class="tag gray" style="height:18px">${esc(custodyLabel(d.custody))}</span> <span class="mono">${esc(d.instance_id)}</span>${d.host_id ? ` <span class="muted">·</span> <span class="small">${esc(hostLabel(d.host_id))}</span>` : ''} <span class="muted">·</span> <span class="mono small">${esc(d.package_version || '—')}</span>`);
+  const ico = document.getElementById('iIco');
+  if (ico) ico.textContent = String(name || 'IN').replace(/[^A-Za-z0-9\u4e00-\u9fa5]/g, '').slice(0, 2).toUpperCase() || 'IN';
+
+  const canToggle = d.installed && !d.drift && d.state !== 'revoked';
+  const toggleBtn = document.getElementById('iToggleBtn');
+  if (toggleBtn) {
+    toggleBtn.textContent = d.enabled ? '停用' : '启用';
+    toggleBtn.disabled = !canToggle;
+    toggleBtn.title = canToggle ? '' : '实例未安装、已撤销或存在漂移，不能启用/停用';
+  }
+  const pushBtn = document.getElementById('iPushBtn');
+  if (pushBtn) {
+    const canPush = normalizeForm(t && t.form) === 'persistent';
+    pushBtn.disabled = !canPush;
+    pushBtn.title = canPush ? '' : '该类型不支持远端下发（仅 form: daemon）';
+  }
+
+  const certRows = [];
+  if (d.cert_serial) certRows.push(`<dt>cert_serial</dt><dd class="mono small">${esc(d.cert_serial)}</dd>`);
+  if (d.cert_fingerprint) certRows.push(`<dt>cert_fingerprint</dt><dd class="mono small" style="word-break:break-all">${esc(d.cert_fingerprint)}</dd>`);
+  if (validTime(d.cert_not_after)) certRows.push(`<dt>cert_not_after</dt><dd class="mono small">${esc(fmtTime(d.cert_not_after))}</dd>`);
+
+  setHTML('iState', `<dl class="kv">
+    <dt>instance_id</dt><dd class="mono">${esc(d.instance_id)}</dd>
+    <dt>type_id</dt><dd class="mono">${esc(d.type_id || '—')}</dd>
+    <dt>custody</dt><dd>${esc(custodyLabel(d.custody))} <span class="mono muted">${esc(d.custody || '')}</span></dd>
+    <dt>host_id</dt><dd class="mono">${esc(d.host_id || '—')}</dd>
+    <dt>package_version</dt><dd class="mono">${esc(d.package_version || '—')}</dd>
+    <dt>listen_port</dt><dd class="mono">${esc(d.listen_port || '—')}</dd>
+    <dt>enabled</dt><dd>${boolTag(d.enabled)}</dd>
+    <dt>installed</dt><dd>${boolTag(d.installed)}</dd>
+    <dt>started</dt><dd>${boolTag(d.started)}</dd>
+    <dt>callable</dt><dd>${boolTag(d.callable)}</dd>
+    <dt>state</dt><dd>${statusTag(d.state, INSTANCE_STATE)}</dd>
+    <dt>state_reason</dt><dd class="small">${esc(d.state_reason || '—')}</dd>
+    <dt>drift</dt><dd class="small">${d.drift ? `<span class="tag bad" style="height:18px">${esc(DRIFT_LABEL[d.drift] || d.drift)}</span>` : '<span class="muted">无</span>'}</dd>
+    <dt>last_error</dt><dd class="small">${esc(d.last_error || '—')}</dd>
+    ${certRows.join('')}
+    <dt>last_probe_at</dt><dd class="mono small">${esc(fmtTimeSafe(d.last_probe_at))}</dd>
+    <dt>last_probe_result</dt><dd class="small">${esc(d.last_probe_result || '—')}</dd>
+    <dt>last_probe_reason</dt><dd class="small">${esc(d.last_probe_reason || '—')}</dd>
+    <dt>created_at</dt><dd class="mono small">${esc(fmtTimeSafe(d.created_at))}</dd>
+    <dt>updated_at</dt><dd class="mono small">${esc(fmtTimeSafe(d.updated_at))}</dd>
+    <dt>阈值</dt><dd class="small muted">证书有效期、探测间隔、状态过期 TTL、远端超时为可配置基线，待 OQ-047～OQ-051 确认</dd>
+  </dl>`);
+
+  const tt = t || {};
+  setHTML('iType', `<dl class="kv">
+    <dt>type_id</dt><dd class="mono">${esc(tt.type_id || d.type_id || '—')}</dd>
+    <dt>display_name</dt><dd>${esc(tt.display_name || '—')}</dd>
+    <dt>form</dt><dd>${tt.form ? formTag(tt.form) : '—'}</dd>
+    <dt>custody</dt><dd>${esc(custodyLabel(tt.custody || d.custody))}</dd>
+    <dt>latest_version</dt><dd class="mono">${esc(tt.latest_version || '—')}</dd>
+    <dt>contract_version</dt><dd class="mono">${esc(tt.contract_version || '—')}</dd>
+    <dt>contract_range</dt><dd class="mono small">${esc(tt.contract_range || '—')}</dd>
+    <dt>runtime_port</dt><dd class="mono">${esc(tt.runtime_port || '—')}</dd>
+    <dt>manifest_sha256</dt><dd class="mono small" style="word-break:break-all" title="${esc(tt.manifest_sha256 || '')}">${esc(tt.manifest_sha256 ? tt.manifest_sha256.slice(0, 24) + '…' : '—')}</dd>
+    <dt>updated_at</dt><dd class="mono small">${esc(fmtTimeSafe(tt.updated_at))}</dd>
+  </dl>`);
+
+  const caps = (d.capabilities && d.capabilities.length) ? d.capabilities : ((t && t.capabilities) || []);
+  setText('iCapCount', `${caps.length} 项`);
+  if (!caps.length) {
+    setHTML('iCaps', '<div class="small muted" style="padding:8px 0">该类型未声明能力</div>');
+  } else {
+    setHTML('iCaps', caps.map(c => {
+      const flags = [];
+      flags.push(c.idempotent ? '<span class="flag">幂等</span>' : '<span class="flag sens">非幂等</span>');
+      if (c.long_running) flags.push('<span class="flag">长时执行</span>');
+      if (c.sensitive) flags.push('<span class="flag sens">敏感</span>');
+      if (c.supports_cancel) flags.push('<span class="flag">支持取消</span>');
+      if (c.concurrency) flags.push(`<span class="flag">${esc(c.concurrency)}</span>`);
+      if (c.risk_level) flags.push(`<span class="flag">${esc(c.risk_level)}</span>`);
+      if (c.suggested_timeout_ms) flags.push(`<span class="flag">建议超时 ${esc(fmtDur(c.suggested_timeout_ms))}</span>`);
+      return `<div class="cap-item">
+        <div class="cap-top"><code>${esc(c.capability_id)}</code></div>
+        <div class="cap-desc">${esc(c.description || '—')}</div>
+        <div class="cap-flags">${flags.join('')}</div>
+        <div style="margin-top:4px"><button class="link" onclick="openInvoke('${arg(c.capability_id)}')">调用 →</button></div>
+      </div>`;
+    }).join(''));
+  }
+
+  renderInstanceConfig(d);
+  renderInstanceOps(d, caps.length);
+}
+
+function renderInstanceOps(d, capCount) {
+  const ops = [];
+  const addOp = (label, desc, enabled, reason, handler) => {
+    ops.push(`<div class="op-row">
+      <div><b>${esc(label)}</b><div class="small muted">${esc(desc)}</div></div>
+      <button class="btn sm" ${enabled ? '' : 'disabled title="' + esc(reason || '不可用') + '"'} onclick="${handler}">${esc(label)}</button>
+    </div>`);
+  };
+  const canToggle = d.installed && !d.drift && d.state !== 'revoked';
+  addOp('启用', '置为 enabled 并尝试启动', !d.enabled && canToggle,
+    !d.installed ? '实例未安装' : (d.drift ? '存在漂移' : (d.state === 'revoked' ? '已撤销' : '已启用')), 'toggleCurrentInstance(true)');
+  addOp('停用', '置为 disabled，停止调用与调度', d.enabled && canToggle,
+    !d.enabled ? '当前未启用' : '实例不可操作', 'toggleCurrentInstance(false)');
+  addOp('探测', '立即探测并刷新三态与漂移', !!d.installed, '实例未安装，无法探测', 'probeCurrentInstance()');
+  addOp('调用', '以当前用户身份调用能力', d.enabled && capCount > 0,
+    !d.enabled ? '实例未启用' : '类型未声明能力', 'openInvoke()');
+  addOp('下发到主机', '为其他主机创建远端实例（不等于可调用）',
+    normalizeForm((typeOf(d.type_id) || {}).form) === 'persistent', '该类型不支持远端下发', 'openPush()');
+  setHTML('iOps', ops.join(''));
+}
+
+function configControl(c) {
+  const attrs = `data-cfg-key="${arg(c.key)}" data-cfg-type="${arg(c.type)}" data-cfg-secret="${c.secret ? '1' : '0'}"`;
+  const style = 'width:100%;height:28px;border:1px solid #c9d0d8;border-radius:3px;padding:0 8px;font-size:12px;background:#fff';
+  if (c.secret) return `<input type="password" autocomplete="new-password" placeholder="输入新值（不回显）" style="${style}" ${attrs}>`;
+  if (c.type === 'boolean') {
+    return `<select style="${style}" ${attrs}><option value="">（不修改）</option><option value="true">true</option><option value="false">false</option></select>`;
+  }
+  if (c.type === 'enum') {
+    return `<select style="${style}" ${attrs}><option value="">（不修改）</option>${(c.enum || []).map(v => `<option value="${arg(v)}">${esc(v)}</option>`).join('')}</select>`;
+  }
+  const ph = c.configured ? '已配置，留空不修改' : '未配置';
+  return `<input type="text" placeholder="${esc(ph)}" style="${style}" ${attrs}>`;
+}
+
+function renderInstanceConfig(d) {
+  const cfg = d.config;
+  if (!Array.isArray(cfg)) {
+    setText('iConfigCount', '加载中…');
+    setHTML('iConfig', '<div class="small muted" style="padding:4px 0">配置状态加载中…</div>');
+    return;
+  }
+  const done = cfg.filter(x => x.configured).length;
+  setText('iConfigCount', cfg.length ? `${done} / ${cfg.length} 项已配置` : '类型未声明 config[]');
+  if (!cfg.length) {
+    setHTML('iConfig', '<div class="small muted" style="padding:4px 0">该类型未声明配置项（接口返回空列表）；配置值永不回显。</div>');
+    return;
+  }
+  setHTML('iConfig', cfg.map(c => {
+    const stateHtml = c.configured
+      ? `<span class="tag ok" style="height:18px">已配置</span> <span class="muted mono small">${esc(fmtTimeSafe(c.updated_at))} · ${esc(c.updated_by || '—')}</span>`
+      : '<span class="tag gray" style="height:18px">未配置</span>';
+    const req = c.required ? '<span class="flag sens">必填</span>' : '';
+    const sec = c.secret ? '<span class="flag sens">敏感</span>' : '';
+    const en = (c.enum && c.enum.length) ? `<div class="small muted">可选：${esc(c.enum.join(' / '))}</div>` : '';
+    return `<div class="op-row" style="align-items:flex-start">
+      <div class="grow">
+        <b class="mono">${esc(c.key)}</b> <span class="flag">${esc(c.type)}</span> ${req} ${sec}
+        <div class="small muted">${esc(c.description || '—')}</div>
+        ${en}
+        <div class="small">${stateHtml}</div>
+      </div>
+      <div style="flex:0 0 200px">
+        ${configControl(c)}
+        ${c.configured ? `<button class="btn sm" style="margin-top:4px" onclick="clearInstanceConfig('${arg(c.key)}')">清除</button>` : ''}
+      </div>
+    </div>`;
+  }).join('') + `<div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn primary sm" onclick="saveInstanceConfig()">保存配置</button></div>`);
+}
+
+async function saveInstanceConfig() {
+  if (!currentInstanceId) return;
+  const body = {};
+  let invalid = '';
+  $$('#iConfig [data-cfg-key]').forEach(el => {
+    const raw = el.value;
+    if (raw === '') return;
+    const key = el.dataset.cfgKey;
+    const typ = (el.dataset.cfgType || '').toLowerCase();
+    if (typ === 'boolean') { body[key] = raw === 'true'; return; }
+    if (typ === 'number') {
+      const n = Number(raw);
+      if (!isFinite(n)) { invalid = `${key} 必须是数字`; return; }
+      body[key] = n;
+      return;
+    }
+    if (typ === 'integer') {
+      const n = Number(raw);
+      if (!Number.isInteger(n)) { invalid = `${key} 必须是整数`; return; }
+      body[key] = n;
+      return;
+    }
+    body[key] = raw;
+  });
+  if (invalid) { alert(invalid); return; }
+  if (!Object.keys(body).length) { alert('没有填写要提交的配置值；留空表示不修改。'); return; }
+  const id = currentInstanceId;
+  try {
+    const d = await api(`/api/plugin-instances/${encodeURIComponent(id)}/config`, { method: 'PUT', body });
+    state.instanceDetails[id] = Object.assign({}, state.instanceDetails[id], { config: d.config || [] });
+    renderInstanceConfig(state.instanceDetails[id]);
+  } catch (e) {
+    alertErr(e);
+  }
+}
+
+async function clearInstanceConfig(key) {
+  if (!currentInstanceId) return;
+  if (!confirm(`确定清除配置项「${key}」？清除后需重新配置。`)) return;
+  const id = currentInstanceId;
+  try {
+    const d = await api(`/api/plugin-instances/${encodeURIComponent(id)}/config`, { method: 'PUT', body: { [key]: null } });
+    state.instanceDetails[id] = Object.assign({}, state.instanceDetails[id], { config: d.config || [] });
+    renderInstanceConfig(state.instanceDetails[id]);
+  } catch (e) {
+    alertErr(e);
+  }
+}
+
+async function loadInstanceProbes(id) {
+  setText('iProbeCount', '加载中…');
+  try {
+    const d = await api(`/api/plugin-instances/${encodeURIComponent(id)}/probes?limit=20`);
+    state.probes[id] = d.probes || [];
+    renderInstanceProbes(id);
+  } catch (e) {
+    setText('iProbeCount', '加载失败');
+    setHTML('iProbes', `<div class="alert bad" style="margin:0"><span>■</span><div>探测历史加载失败：<code>${esc(e.code)}</code> ${esc(e.message)}</div></div>`);
+  }
+}
+
+function renderInstanceProbes(id) {
+  const list = state.probes[id] || [];
+  setText('iProbeCount', `共 ${list.length} 条`);
+  if (!list.length) {
+    setHTML('iProbes', '<div class="small muted" style="padding:4px 0">暂无探测记录：点击「探测」可立即探测一次</div>');
+    return;
+  }
+  setHTML('iProbes', list.map(p => `<div class="tl-item">
+    <div class="tm">${esc(fmtShort(p.probe_at))}</div>
+    <div class="tx">${p.ok ? '<span class="tag ok" style="height:18px">ok</span>' : '<span class="tag bad" style="height:18px">failed</span>'}
+      <span class="small">${esc(p.stage || '—')}</span>
+      <span class="small muted mono">${esc(fmtDur(p.latency_ms))}</span>
+      ${p.detail ? `<div class="small muted">${esc(summaryText(p.detail))}</div>` : ''}
+    </div>
+  </div>`).join(''));
+}
+
+function toggleCurrentInstance(on) {
+  const d = state.instanceDetails[currentInstanceId];
+  if (!d) return;
+  toggleInstance(d.instance_id, typeof on === 'boolean' ? on : !d.enabled);
+}
+function probeCurrentInstance() {
+  if (currentInstanceId) probeInstance(currentInstanceId);
+}
+
+async function toggleInstance(id, on) {
+  try {
+    const d = await api(`/api/plugin-instances/${encodeURIComponent(id)}/${on ? 'enable' : 'disable'}`, { method: 'POST', body: {} });
+    state.instanceDetails[id] = Object.assign({}, state.instanceDetails[id] || {}, d);
+    mergeInstanceRow(d);
+    if (currentInstanceId === id) renderInstanceDetail(state.instanceDetails[id]);
+    await loadInstances();
+    if (currentHostId) loadHostInstances(currentHostId);
+    loadOverview();
+  } catch (e) {
+    alertErr(e);
+    if (currentInstanceId === id) openInstance(id);
+    else loadInstances();
+  }
+}
+
+async function probeInstance(id) {
+  try {
+    const d = await api(`/api/plugin-instances/${encodeURIComponent(id)}/probe`, { method: 'POST', body: {} });
+    state.instanceDetails[id] = Object.assign({}, state.instanceDetails[id] || {}, d);
+    mergeInstanceRow(d);
+    if (currentInstanceId === id) {
+      renderInstanceDetail(state.instanceDetails[id]);
+      loadInstanceProbes(id);
+    }
+    await loadInstances();
+    if (currentHostId) loadHostInstances(currentHostId);
+  } catch (e) {
+    alertErr(e);
+  }
+}
+
+async function scanPlugins(btn) {
+  const old = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '扫描中…'; }
+  try {
+    const r = await api('/api/plugins/scan', { method: 'POST', body: {} });
+    alert(`扫描完成：新增 ${r.inserted}，更新 ${r.updated}，未变化 ${r.unchanged}，拒绝 ${r.rejected}` +
+      (r.warnings && r.warnings.length ? `\n警告 ${r.warnings.length} 项` : '') +
+      (r.conflicts && r.conflicts.length ? `\n冲突 ${r.conflicts.length} 项` : ''));
+    await loadPlugins();
+    await Promise.allSettled([loadPluginTypes(), loadInstances()]);
+    loadOverview();
+  } catch (e) {
+    alertErr(e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = old || '扫描插件包'; }
+  }
+}
+
+/* ---- 能力调用 ---- */
+function openInvoke(cap) {
+  const d = state.instanceDetails[currentInstanceId];
+  if (!d) { alert('实例详情尚未加载，请先打开实例详情'); return; }
+  const caps = (d.capabilities && d.capabilities.length) ? d.capabilities : ((typeOf(d.type_id) || {}).capabilities || []);
+  if (!caps.length) { alert('该实例的类型未声明能力'); return; }
+  const sel = document.getElementById('invokeCap');
+  sel.innerHTML = caps.map(c => `<option value="${arg(c.capability_id)}">${esc(c.capability_id)}</option>`).join('');
+  if (cap) sel.value = cap;
+  setText('invokePlugin', `${(d.type && d.type.display_name) || typeName(d.type_id)}（${d.instance_id}）`);
+  const input = document.getElementById('invokeInput');
+  if (input) input.value = '{}';
+  setHTML('invokeResult', '');
+  const box = document.getElementById('invokeResult');
+  if (box) box.style.display = 'none';
+  const modal = document.getElementById('invokeModal');
+  if (modal) modal.style.display = 'flex';
+}
+function closeInvoke() {
+  const modal = document.getElementById('invokeModal');
+  if (modal) modal.style.display = 'none';
+}
+async function submitInvoke() {
+  const d = state.instanceDetails[currentInstanceId];
+  if (!d) return;
+  const cap = (document.getElementById('invokeCap') || {}).value;
+  const raw = (document.getElementById('invokeInput') || {}).value || '{}';
+  let input;
+  try { input = JSON.parse(raw || '{}'); }
+  catch (e) { alert('输入不是合法 JSON：' + e.message); return; }
+  if (!input || typeof input !== 'object' || Array.isArray(input)) { alert('输入必须是 JSON 对象'); return; }
+  if (!d.callable) {
+    const why = instanceUnavailable(d) || '实例当前不可调用';
+    if (!confirm(`目标实例当前不可调用：${why}。仍要尝试调用？`)) return;
+  }
+  try {
+    const res = await api(`/api/plugin-instances/${encodeURIComponent(currentInstanceId)}/capabilities/${encodeURIComponent(cap)}/invoke`,
+      { method: 'POST', body: { input } });
+    showInvokeResult(res, null);
+  } catch (e) {
+    if (e.body && e.body.invocation_id) showInvokeResult(e.body, e);
+    else alertErr(e);
+  }
+}
+function showInvokeResult(res, e) {
+  const box = document.getElementById('invokeResult');
+  if (!box) return;
+  box.style.display = 'block';
+  const status = res && res.status;
+  const out = res && res.output !== undefined && res.output !== null ? jsonText(res.output) : '';
+  const err = res && res.error ? `${res.error.code || ''} ${res.error.message || ''}` : (e ? errText(e) : '');
+  box.innerHTML = `<div class="io-box">
+    <div class="h"><span>调用结果</span><span>${statusTag(status, EXEC_STATUS)}</span></div>
+    <div class="small" style="margin-bottom:6px">
+      invocation_id：<span class="mono">${esc(res && res.invocation_id || '—')}</span><br>
+      耗时：<span class="mono">${esc(fmtDur(res && res.duration_ms))}</span>
+      ${res && res.instance_id ? `<br>实例：<span class="mono">${esc(res.instance_id)}</span>` : ''}
+      ${res && res.plugin_version ? `<br>插件版本：<span class="mono">${esc(res.plugin_version)}</span>` : ''}
+    </div>
+    ${err ? `<div class="small" style="color:#a8322c;margin-bottom:6px">错误：${esc(err)}</div>` : ''}
+    <pre>${esc(out || '（无输出）')}</pre>
+  </div>`;
+  loadExecutions();
+  loadOverview();
+}
+
+/* ---- 主机 ---- */
+function hostLatestDists(hostId) {
+  const list = (state.dists[hostId] || []).slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const seen = new Set();
+  const latest = [];
+  for (const d of list) {
+    if (seen.has(d.plugin_id)) continue;
+    seen.add(d.plugin_id);
+    latest.push(d);
+  }
+  return latest;
+}
+function deployedCount(hostId) {
+  return hostLatestDists(hostId).filter(d => d.state === 'installed').length;
+}
+
+async function loadHosts() {
+  loadingRow('hostRows', 7);
+  setText('hsCount', '加载中…');
+  try {
+    const d = await api('/api/hosts');
+    state.hosts = d.hosts || [];
+    state.hostsLoaded = true;
+    setText('navHostCnt', String(state.hosts.length));
+    populateInstanceHostFilter();
+    renderHosts();
+    renderOverview();
+    await loadAllDistributions();
+    renderHosts();
+    if (currentHostId) renderHostDetail(currentHostId);
+  } catch (e) {
+    state.hostsLoaded = false;
+    errorRow('hostRows', 7, e, 'loadHosts()');
+    setText('hsCount', '加载失败');
+  }
+}
+
+async function loadAllDistributions() {
+  await Promise.all(state.hosts.map(h => api(`/api/hosts/${encodeURIComponent(h.host_id)}/distributions`)
+    .then(d => { state.dists[h.host_id] = d.distributions || []; })
+    .catch(() => { /* 单台主机下发记录失败不阻塞列表 */ })));
+}
+
+function renderHosts() {
+  const q = (document.getElementById('hsSearch') || {}).value || '';
+  const auth = (document.getElementById('hsAuth') || {}).value || '';
+  const conn = (document.getElementById('hsConn') || {}).value || '';
+  const term = q.trim().toLowerCase();
+  const rows = state.hosts.filter(h => {
+    if (auth && h.auth_method !== auth) return false;
+    if (conn && h.status !== conn) return false;
+    if (term) {
+      const hay = [h.name, h.host_id, h.address, h.username].join(' ').toLowerCase();
+      if (!hay.includes(term)) return false;
+    }
+    return true;
+  });
+  if (!state.hostsLoaded) loadingRow('hostRows', 7, '主机数据加载中…');
+  else if (!rows.length) emptyRow('hostRows', 7, state.hosts.length ? '没有符合筛选条件的主机' : '暂无主机，点击右上角新增');
+  else {
+    setHTML('hostRows', rows.map(h => {
+      const st = HOST_STATUS[h.status] || { label: h.status || '—', cls: 'gray' };
+      const dep = deployedCount(h.host_id);
+      return `<tr>
+        <td><span class="pl-name" onclick="openHostDetail('${arg(h.host_id)}')">${esc(h.name)}</span><span class="pl-id">${esc(h.host_id)}</span></td>
+        <td class="mono">${esc(h.address)}:${esc(h.port)}</td>
+        <td class="small">${h.auth_method === 'key' ? 'SSH 密钥' : (h.auth_method === 'password' ? '账号密码' : esc(h.auth_method || '—'))}</td>
+        <td>${statusTag(h.status, HOST_STATUS)}</td>
+        <td class="num">${dep}</td>
+        <td class="small">${esc(fmtShort(h.last_test_at))}${h.last_test_error ? `<div class="muted mono" style="font-size:10.5px" title="${esc(h.last_test_error)}">${esc(summaryText(h.last_test_error))}</div>` : ''}</td>
+        <td class="nowrap">
+          <button class="link" onclick="testHost('${arg(h.host_id)}')">测试</button>
+          <button class="link" onclick="openHostDrawer('${arg(h.host_id)}')">编辑</button>
+          <button class="link" onclick="openHostDetail('${arg(h.host_id)}')">详情</button>
+          <button class="link danger" onclick="deleteHost('${arg(h.host_id)}')">删除</button>
+        </td>
+      </tr>`;
+    }).join(''));
+  }
+  setText('hsCount', `共 ${rows.length} 台主机`);
+  setText('navHostCnt', String(state.hosts.length));
+}
+
+async function testHost(id) {
+  try {
+    const d = await api(`/api/hosts/${encodeURIComponent(id)}/test`, { method: 'POST', body: {} });
+    alert(`连接测试成功：${d.status || 'reachable'}${d.os ? '\nOS：' + d.os : ''}`);
+  } catch (e) {
+    const result = e.body && e.body.result;
+    let msg = `连接测试失败：${errText(e)}`;
+    if (result) {
+      msg += `\n结果状态：${result.status || '—'}`;
+      if (result.error) msg += `\n原因：${result.error}`;
+      if (result.os) msg += `\nOS：${result.os}`;
+    }
+    alert(msg);
+  }
+  await loadHosts();
+  if (currentHostId === id) renderHostDetail(id);
+}
+
+async function deleteHost(id) {
+  const h = state.hosts.find(x => x.host_id === id);
+  if (!h) return;
+  if (!confirm(`确定删除主机「${h.name}」？已有下发记录时将强制删除（force=true）。`)) return;
+  try {
+    await api(`/api/hosts/${encodeURIComponent(id)}?force=true`, { method: 'DELETE' });
+    if (currentHostId === id) { currentHostId = ''; go('hosts'); }
+    await loadHosts();
+    loadOverview();
+  } catch (e) {
+    alertErr(e);
+  }
+}
+
+async function openHostDetail(id, focusPlugins) {
+  currentHostId = id;
+  go('host-detail');
+  renderHostDetail(id);
+  try {
+    const d = await api('/api/hosts/' + encodeURIComponent(id));
+    const i = state.hosts.findIndex(h => h.host_id === id);
+    if (i >= 0) state.hosts[i] = d;
+    if (!state.dists[id]) {
+      const dd = await api(`/api/hosts/${encodeURIComponent(id)}/distributions`);
+      state.dists[id] = dd.distributions || [];
+    }
+    await loadHostInstances(id);
+    renderHostDetail(id);
+  } catch (e) {
+    setHTML('hdInfo', `<div class="alert bad"><span>■</span><div>主机详情加载失败：<code>${esc(e.code)}</code> ${esc(e.message)}</div></div>`);
+  }
+  if (focusPlugins) {
+    const el = document.getElementById('hostPluginsCard');
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+async function loadHostInstances(hostId) {
+  if (!hostId) return;
+  try {
+    const d = await api('/api/plugin-instances?host_id=' + encodeURIComponent(hostId));
+    state.hostInstances[hostId] = d.instances || [];
+    delete state.hostInstanceErr[hostId];
+  } catch (e) {
+    state.hostInstances[hostId] = null;
+    state.hostInstanceErr[hostId] = e;
+  }
+  if (currentHostId === hostId) renderHostInstances(hostId);
+}
+
+function renderHostInstances(hostId) {
+  const list = state.hostInstances[hostId];
+  if (state.hostInstanceErr[hostId]) {
+    setText('hdInstCount', '加载失败');
+    errorRow('hdInstances', 7, state.hostInstanceErr[hostId], 'loadHostInstances()');
+    return;
+  }
+  if (list === undefined || list === null) {
+    setText('hdInstCount', '加载中…');
+    loadingRow('hdInstances', 7, '远端实例加载中…');
+    return;
+  }
+  setText('hdInstCount', `${list.length} 个`);
+  if (!list.length) {
+    emptyRow('hdInstances', 7, '尚无远端实例：在下发明细中选择支持远端的插件类型下发即可创建');
+    return;
+  }
+  setHTML('hdInstances', list.map(inst => {
+    const reason = instanceUnavailable(inst);
+    const drift = inst.drift ? `<div class="small" style="color:#a8322c">漂移：${esc(DRIFT_LABEL[inst.drift] || inst.drift)}</div>` : '';
+    const lastErr = inst.last_error ? `<div class="small muted" title="${esc(inst.last_error)}">${esc(summaryText(inst.last_error))}</div>` : '';
+    const probe = validTime(inst.last_probe_at)
+      ? `${esc(fmtShort(inst.last_probe_at))}<div class="small muted">${esc(inst.last_probe_result || '—')}</div>`
+      : '<span class="small muted">尚未探测</span>';
+    const canToggle = inst.installed && !inst.drift && inst.state !== 'revoked';
+    return `<tr>
+      <td><span class="pl-name" onclick="openInstance('${arg(inst.instance_id)}')">${esc(typeName(inst.type_id))}</span><span class="pl-id">${esc(inst.instance_id)}</span></td>
+      <td class="small mono">${esc(inst.type_id)}</td>
+      <td class="mono small">${esc(inst.listen_port || '—')}</td>
+      <td>${threeStateTags(inst)}</td>
+      <td>${statusTag(inst.state, INSTANCE_STATE)}${drift}${reason ? `<div class="small muted">${esc(reason)}</div>` : ''}${lastErr}</td>
+      <td class="small">${probe}</td>
+      <td class="nowrap">
+        <button class="link" onclick="toggleInstance('${arg(inst.instance_id)}', ${inst.enabled ? 'false' : 'true'})" ${canToggle ? '' : 'disabled'}>${inst.enabled ? '停用' : '启用'}</button>
+        <button class="link" onclick="probeInstance('${arg(inst.instance_id)}')" ${inst.installed ? '' : 'disabled'}>探测</button>
+        <button class="link" onclick="openInstance('${arg(inst.instance_id)}')">详情</button>
+      </td>
+    </tr>`;
+  }).join(''));
+}
+
+function scrollHostPlugins() {
+  const el = document.getElementById('hostPluginsCard');
+  if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderHostDetail(id) {
+  const h = state.hosts.find(x => x.host_id === id);
+  if (!h) return;
+  setText('hdName', h.name);
+  setHTML('hdMeta', `${statusTag(h.status, HOST_STATUS)} <span class="mono">${esc(h.address)}:${esc(h.port)}</span> <span class="muted">·</span> ${h.auth_method === 'key' ? 'SSH 密钥' : '账号密码'} <span class="muted">·</span> 凭据${h.credential_configured ? '已配置' : '未配置'}`);
+  const ico = document.getElementById('hdIco');
+  if (ico) ico.textContent = (h.name || 'H').replace(/[^A-Za-z0-9\u4e00-\u9fa5]/g, '').slice(0, 2).toUpperCase() || 'H';
+
+  setHTML('hdInfo', `<dl class="kv">
+    <dt>host_id</dt><dd class="mono">${esc(h.host_id)}</dd>
+    <dt>name</dt><dd>${esc(h.name)}</dd>
+    <dt>address</dt><dd class="mono">${esc(h.address)}</dd>
+    <dt>port</dt><dd class="mono">${esc(h.port)}</dd>
+    <dt>username</dt><dd class="mono">${esc(h.username || '—')}</dd>
+    <dt>auth_method</dt><dd class="mono">${esc(h.auth_method || '—')}</dd>
+    <dt>credential_configured</dt><dd>${h.credential_configured ? '<span class="tag ok">已配置</span>' : '<span class="tag bad">未配置</span>'}</dd>
+    <dt>host_key_fingerprint</dt><dd class="mono small">${esc(h.host_key_fingerprint || '—')}</dd>
+    <dt>host_key_trusted</dt><dd>${h.host_key_trusted ? '<span class="tag ok">已信任</span>' : '<span class="tag gray">未信任</span>'}</dd>
+    <dt>status</dt><dd>${statusTag(h.status, HOST_STATUS)}</dd>
+    <dt>last_test_at</dt><dd class="mono small">${esc(fmtTime(h.last_test_at))}</dd>
+    <dt>last_test_error</dt><dd class="small">${esc(h.last_test_error || '—')}</dd>
+    <dt>created_by</dt><dd class="mono">${esc(h.created_by || '—')}</dd>
+    <dt>created_at</dt><dd class="mono small">${esc(fmtTime(h.created_at))}</dd>
+    <dt>updated_at</dt><dd class="mono small">${esc(fmtTime(h.updated_at))}</dd>
+  </dl>`);
+
+  const latest = hostLatestDists(id);
+  const installed = latest.filter(d => d.installed || d.state === 'installed' || d.state === 'callable').length;
+  setText('hdPlugCount', `${latest.length} 个插件 · 已安装 ${installed}`);
+
+  renderHostPlugins(id);
+  renderHostInstances(id);
+  renderHostDeploys(id);
+}
+
+function deployableTypes() {
+  return (state.types || []).filter(t => normalizeForm(t.form) === 'persistent');
+}
+
+function renderHostPlugins(id) {
+  const latest = hostLatestDists(id);
+  const deployedIds = new Set(latest.map(d => d.plugin_id));
+  const rest = deployableTypes().filter(t => !deployedIds.has(t.type_id));
+  setText('hdDeployedCnt', `${latest.length} 个`);
+  setText('hdRestCnt', `${rest.length} 个`);
+
+  if (!state.typesLoaded) {
+    loadingRow('hdPluginsDeployed', 6, '类型目录加载中…');
+    loadingRow('hdPluginsRest', 6, '类型目录加载中…');
+    return;
+  }
+
+  if (!latest.length) emptyRow('hdPluginsDeployed', 6, '尚未下发任何插件');
+  else {
+    setHTML('hdPluginsDeployed', latest.map(d => {
+      const t = typeOf(d.plugin_id);
+      const canRetry = d.state === 'start_failed' || d.state === 'failed' || d.state === 'interrupted' || d.state === 'cancelled';
+      const canCancel = d.state !== 'cancelled';
+      const err = d.error_message ? `<div class="small" style="color:#a8322c">${esc(d.error_category ? d.error_category + ' · ' : '')}${esc(summaryText(d.error_message))}</div>` : '';
+      return `<tr>
+        <td><span class="pl-name">${esc(t ? (t.display_name || t.type_id) : d.plugin_id)}</span><span class="pl-id">${esc(d.plugin_id)}</span></td>
+        <td>${formTag(t ? t.form : '')}</td>
+        <td class="mono">${esc(d.plugin_version || '—')}</td>
+        <td>${statusTag(d.state, DIST_STATE)}<div class="small">${distThreeStateTags(d)}</div>${err}</td>
+        <td class="small mono">${esc(fmtShort(d.created_at))}</td>
+        <td class="nowrap">
+          ${canRetry ? `<button class="link" onclick="retryDeploy('${arg(d.distribution_id)}')">重试</button>` : ''}
+          ${canCancel ? `<button class="link danger" onclick="revokeDeploy('${arg(d.distribution_id)}','${arg(d.plugin_id)}')">撤销</button>` : ''}
+        </td>
+      </tr>`;
+    }).join(''));
+  }
+
+  if (!rest.length) emptyRow('hdPluginsRest', 6, (state.types || []).length ? '所有支持远端的类型均已下发（已下发 ≠ 可调用）' : '暂无类型：先在插件管理扫描插件包');
+  else {
+    setHTML('hdPluginsRest', rest.map(t => {
+      return `<tr>
+        <td><label class="chk"><input type="checkbox" value="${arg(t.type_id)}" ${hostSel.has(t.type_id) ? 'checked' : ''} onchange="toggleHostPluginSel(this)"></label></td>
+        <td><span class="pl-name">${esc(t.display_name || t.type_id)}</span><span class="pl-id">${esc(t.type_id)}</span></td>
+        <td>${formTag(t.form)}</td>
+        <td class="mono">${esc(t.latest_version || '—')}</td>
+        <td class="num">${(t.capabilities || []).length}</td>
+        <td><span class="tag form" style="height:18px">${esc(custodyLabel(t.custody))}</span></td>
+      </tr>`;
+    }).join(''));
+  }
+  updateBatchUI();
+}
+
+function updateBatchUI() {
+  setText('hpSelCount', `已选 ${hostSel.size} 个`);
+  const btn = document.getElementById('hpBatchBtn');
+  if (btn) btn.disabled = !hostSel.size || !!(batchRun && batchRun.running);
+  renderBatchProgress();
+}
+
+function renderBatchProgress() {
+  const el = document.getElementById('hpProgress');
+  if (!el) return;
+  if (!batchRun || !batchRun.items.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="small muted" style="margin-bottom:4px">${batchRun.running ? '下发中…' : '本次下发结果'}</div>` +
+    batchRun.items.map(it => {
+      const t = typeOf(it.pid);
+      return `<div class="small" style="margin:2px 0">${esc(t ? (t.display_name || t.type_id) : it.pid)} ${statusTag(it.state, DIST_STATE)} ${it.error ? `<span style="color:#a8322c">${esc(summaryText(it.error))}</span>` : ''}</div>`;
+    }).join('');
+}
+
+function toggleHostPluginSel(el) {
+  if (el.checked) hostSel.add(el.value);
+  else hostSel.delete(el.value);
+  updateBatchUI();
+}
+function toggleAllHostPlugins(checked) {
+  if (!currentHostId) return;
+  const latest = hostLatestDists(currentHostId);
+  const deployedIds = new Set(latest.map(d => d.plugin_id));
+  deployableTypes().filter(t => !deployedIds.has(t.type_id)).forEach(t => {
+    if (checked) hostSel.add(t.type_id); else hostSel.delete(t.type_id);
+  });
+  renderHostPlugins(currentHostId);
+}
+
+async function batchDeploy() {
+  if (!currentHostId || !hostSel.size) return;
+  const hostId = currentHostId;
+  const ids = Array.from(hostSel);
+  const items = [];
+  batchRun = { running: true, hostId, items };
+  renderBatchProgress();
+  updateBatchUI();
+  for (const pid of ids) {
+    const t = typeOf(pid);
+    if (!t) continue;
+    try {
+      const d = await api(`/api/hosts/${encodeURIComponent(hostId)}/distributions`, {
+        method: 'POST',
+        body: { plugin_id: t.type_id, plugin_version: t.latest_version }
+      });
+      items.push({ pid, id: d.distribution_id, state: d.state || 'queued', error: d.error_message || '' });
+    } catch (e) {
+      items.push({ pid, id: '', state: 'failed', error: errText(e) });
+    }
+    renderBatchProgress();
+  }
+  hostSel.clear();
+  updateBatchUI();
+  pollBatch(hostId, items, Date.now());
+}
+
+async function pollBatch(hostId, items, start) {
+  try {
+    const d = await api(`/api/hosts/${encodeURIComponent(hostId)}/distributions`);
+    state.dists[hostId] = d.distributions || [];
+    for (const it of items) {
+      if (!it.id) continue;
+      const dist = (d.distributions || []).find(x => x.distribution_id === it.id);
+      if (dist) { it.state = dist.state; it.error = dist.error_message || ''; }
+    }
+    if (currentHostId === hostId) {
+      renderHostPlugins(hostId);
+      renderHostDeploys(hostId);
+    }
+    renderBatchProgress();
+    const pending = items.some(it => it.id && !TERMINAL_DIST.has(it.state));
+    if (pending && Date.now() - start < 30000) {
+      setTimeout(() => pollBatch(hostId, items, start), 1500);
+    } else {
+      batchRun.running = false;
+      renderBatchProgress();
+      updateBatchUI();
+      loadHosts();
+      loadOverview();
+    }
+  } catch (e) {
+    batchRun.running = false;
+    renderBatchProgress();
+    updateBatchUI();
+  }
+}
+
+async function revokeDeploy(distId, pid) {
+  const t = typeOf(pid);
+  if (!confirm(`确定撤销插件「${t ? (t.display_name || t.type_id) : pid}」的下发记录？撤销会同时移除对应远端实例。`)) return;
+  try {
+    await api('/api/distributions/' + encodeURIComponent(distId), { method: 'DELETE' });
+    await loadHosts();
+    if (currentHostId) {
+      await loadHostInstances(currentHostId);
+      renderHostDetail(currentHostId);
+    }
+  } catch (e) { alertErr(e); }
+}
+async function retryDeploy(distId) {
+  try {
+    await api('/api/distributions/' + encodeURIComponent(distId) + '/retry', { method: 'POST', body: {} });
+    await loadHosts();
+    if (currentHostId) {
+      await loadHostInstances(currentHostId);
+      renderHostDetail(currentHostId);
+    }
+  } catch (e) { alertErr(e); }
+}
+
+function renderHostDeploys(id) {
+  const list = (state.dists[id] || []).slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  if (!list.length) { emptyRow('hdDeploys', 8, '暂无下发记录：在上方「插件」卡片选择类型并批量下发'); return; }
+  setHTML('hdDeploys', list.map(d => {
+    const t = typeOf(d.plugin_id);
+    const span = `${fmtShort(d.started_at)} → ${fmtShort(d.finished_at)}`;
+    const err = d.error_message || d.note || '';
+    const canRetry = d.state === 'start_failed' || d.state === 'failed' || d.state === 'interrupted' || d.state === 'cancelled';
+    const canCancel = d.state !== 'cancelled';
+    return `<tr>
+      <td class="small mono">${esc(fmtTime(d.created_at))}</td>
+      <td><span class="pl-name">${esc(t ? (t.display_name || t.type_id) : d.plugin_id)}</span><span class="pl-id">${esc(d.plugin_id)} · ${esc(d.plugin_version || '—')}</span></td>
+      <td>${distThreeStateTags(d)}</td>
+      <td>${statusTag(d.state, DIST_STATE)}</td>
+      <td class="small">${esc(d.stage || '—')}</td>
+      <td class="small mono">${esc(span)}</td>
+      <td class="small">
+        ${d.instance_id ? `<div class="mono">${esc(d.instance_id)}</div>` : ''}
+        ${d.cert_serial ? `<div class="mono muted" style="font-size:10.5px">sn: ${esc(d.cert_serial)}</div>` : ''}
+        ${err ? `<div title="${esc(err)}">${esc(summaryText(err))}</div>` : ''}
+        ${!d.instance_id && !d.cert_serial && !err ? '—' : ''}
+      </td>
+      <td class="nowrap">
+        ${canRetry ? `<button class="link" onclick="retryDeploy('${arg(d.distribution_id)}')">重试</button>` : ''}
+        ${canCancel ? `<button class="link danger" onclick="revokeDeploy('${arg(d.distribution_id)}','${arg(d.plugin_id)}')">撤销</button>` : ''}
+        ${!canRetry && !canCancel ? '—' : ''}
+      </td>
+    </tr>`;
+  }).join(''));
+}
+
+/* ---- 主机抽屉 ---- */
+function openHostDrawer(id) {
+  editingHostId = id || '';
+  const h = id ? state.hosts.find(x => x.host_id === id) : null;
+  setText('drawerTitle', h ? '编辑主机' : '新增主机');
+  const f = (n) => document.getElementById(n);
+  if (f('hfName')) f('hfName').value = h ? h.name : '';
+  if (f('hfAddr')) f('hfAddr').value = h ? h.address : '';
+  if (f('hfPort')) f('hfPort').value = h ? h.port : '22';
+  if (f('hfUser')) f('hfUser').value = h ? (h.username || '') : '';
+  const auth = h ? (h.auth_method || 'key') : 'key';
+  $$('input[name="hAuth"]').forEach(el => { el.checked = el.value === auth; });
+  renderAuthBlock();
+  const hint = f('credHint');
+  if (hint) hint.style.display = '';
+  const drawer = document.getElementById('hostDrawer');
+  const mask = document.getElementById('hostDrawerMask');
+  if (drawer) drawer.classList.add('open');
+  if (mask) mask.classList.add('open');
+}
+function closeHostDrawer() {
+  const d = document.getElementById('hostDrawer');
+  const m = document.getElementById('hostDrawerMask');
+  if (d) d.classList.remove('open');
+  if (m) m.classList.remove('open');
+  editingHostId = '';
+}
+function currentHostAuth() {
+  const el = $$('input[name="hAuth"]').find(x => x.checked);
+  return el ? el.value : 'key';
+}
+function renderAuthBlock() {
+  const auth = currentHostAuth();
+  const box = document.getElementById('authBlock');
+  if (!box) return;
+  const hint = editingHostId ? '（编辑时留空表示不修改）' : '';
+  if (auth === 'key') {
+    box.innerHTML = `
+      <div class="form-row">
+        <label>私钥 <span class="small muted">${hint}</span></label>
+        <textarea id="hfKey" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+      </div>
+      <div class="form-row">
+        <label>私钥口令（可选） <span class="small muted">${hint}</span></label>
+        <input id="hfKeyPass" type="password" autocomplete="new-password" placeholder="留空表示无口令或不修改">
+      </div>`;
+  } else {
+    box.innerHTML = `
+      <div class="form-row">
+        <label>密码 <span class="small muted">${hint}</span></label>
+        <input id="hfPwd" type="password" autocomplete="new-password" placeholder="留空表示不修改">
+      </div>`;
+  }
+}
+async function saveHost() {
+  const name = (document.getElementById('hfName') || {}).value.trim();
+  const address = (document.getElementById('hfAddr') || {}).value.trim();
+  const port = Number((document.getElementById('hfPort') || {}).value);
+  const username = (document.getElementById('hfUser') || {}).value.trim();
+  const auth = currentHostAuth();
+  if (!name || !address || !username) { alert('名称、地址、登录用户名均为必填'); return; }
+  if (!Number.isInteger(port) || port < 1 || port > 65535) { alert('端口必须是 1-65535 的整数'); return; }
+
+  let credential = null;
+  if (auth === 'key') {
+    const key = ((document.getElementById('hfKey') || {}).value || '').trim();
+    if (key) {
+      credential = { method: 'key', private_key: key };
+      const pass = (document.getElementById('hfKeyPass') || {}).value;
+      if (pass) credential.passphrase = pass;
+    }
+  } else {
+    const pwd = (document.getElementById('hfPwd') || {}).value;
+    if (pwd) credential = { method: 'password', password: pwd };
+  }
+  if (!editingHostId && !credential) { alert('新增主机必须填写凭据'); return; }
+  if (editingHostId) {
+    const old = state.hosts.find(x => x.host_id === editingHostId);
+    if (old && old.auth_method !== auth && !credential) {
+      alert('切换认证方式时必须填写新凭据');
+      return;
+    }
+  }
+
+  const body = { name, address, port, username, auth_method: auth };
+  if (credential) body.credential = credential;
+  try {
+    if (editingHostId) {
+      await api('/api/hosts/' + encodeURIComponent(editingHostId), { method: 'PUT', body });
+      closeHostDrawer();
+      await loadHosts();
+      if (currentHostId === editingHostId) renderHostDetail(editingHostId);
+      loadOverview();
+    } else {
+      const d = await api('/api/hosts', { method: 'POST', body });
+      closeHostDrawer();
+      await loadHosts();
+      loadOverview();
+      if (d && d.host_id) openHostDetail(d.host_id, true);
+    }
+  } catch (e) { alertErr(e); }
+}
+
+/* ---- 下发弹窗 ---- */
+function openPush(hostId) {
+  const types = deployableTypes();
+  if (!types.length) {
+    alert('暂无支持远端下发的插件类型（要求 form: daemon）；请先在插件管理扫描插件包。');
+    return;
+  }
+  const inst = state.instanceDetails[currentInstanceId];
+  const ps = document.getElementById('pushPluginSel');
+  ps.innerHTML = types.map(t => `<option value="${arg(t.type_id)}">${esc(t.display_name || t.type_id)}（${esc(t.type_id)} · ${esc(t.latest_version || '—')}）</option>`).join('');
+  if (inst && types.some(t => t.type_id === inst.type_id)) ps.value = inst.type_id;
+  ps.onchange = updatePushHint;
+  setText('pushPlugin', `${types.length} 个可下发类型`);
+
+  const hs = document.getElementById('pushHostSel');
+  if (!state.hosts.length) {
+    hs.innerHTML = '<option value="">（暂无主机，请先在主机管理新增）</option>';
+    setText('pushHostHint', '请先新增主机');
+  } else {
+    hs.innerHTML = state.hosts.map(h => `<option value="${arg(h.host_id)}">${esc(h.name)} · ${esc(h.address)}</option>`).join('');
+    if (hostId && state.hosts.some(h => h.host_id === hostId)) hs.value = hostId;
+    else if (inst && inst.host_id && state.hosts.some(h => h.host_id === inst.host_id)) hs.value = inst.host_id;
+    hs.onchange = updatePushHint;
+    setText('pushHostHint', `共 ${state.hosts.length} 台可选`);
+  }
+  const port = document.getElementById('pushPort');
+  if (port) port.value = '';
+  updatePushHint();
+  setHTML('pushResult', '');
+  const box = document.getElementById('pushResult');
+  if (box) box.style.display = 'none';
+  const modal = document.getElementById('pushModal');
+  if (modal) modal.style.display = 'flex';
+}
+function updatePushHint() {
+  const pid = (document.getElementById('pushPluginSel') || {}).value;
+  const hid = (document.getElementById('pushHostSel') || {}).value;
+  const t = typeOf(pid);
+  setText('pushPlugin', t ? `${t.display_name || t.type_id} · ${t.latest_version || '—'}` : '—');
+  if (!state.hosts.length) return;
+  const h = hostOf(hid);
+  setText('pushHostHint', h ? `${h.name} · ${h.address}:${h.port} · 凭据${h.credential_configured ? '已配置' : '未配置'}` : '请选择目标主机');
+}
+function closePush() {
+  const modal = document.getElementById('pushModal');
+  if (modal) modal.style.display = 'none';
+  if (pushPollTimer) { clearTimeout(pushPollTimer); pushPollTimer = null; }
+}
+async function confirmPush() {
+  const pid = (document.getElementById('pushPluginSel') || {}).value;
+  const hid = (document.getElementById('pushHostSel') || {}).value;
+  if (!pid || !hid) { alert('请选择插件类型与目标主机'); return; }
+  const t = typeOf(pid);
+  if (!t) { alert('插件类型不在当前目录中，请刷新后重试'); return; }
+  const portRaw = ((document.getElementById('pushPort') || {}).value || '').trim();
+  const body = { plugin_id: t.type_id, plugin_version: t.latest_version };
+  if (portRaw) {
+    const port = Number(portRaw);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) { alert('监听端口必须是 1-65535 的整数，或留空使用清单默认值'); return; }
+    body.port = port;
+  }
+  try {
+    const d = await api(`/api/hosts/${encodeURIComponent(hid)}/distributions`, { method: 'POST', body });
+    renderPushResult(d, null);
+    if (d && d.distribution_id && !TERMINAL_DIST.has(d.state)) pollPush(d.distribution_id, Date.now());
+    loadHosts();
+    if (currentHostId) loadHostInstances(currentHostId);
+  } catch (e) {
+    renderPushResult(null, e);
+  }
+}
+function renderPushResult(d, e) {
+  const box = document.getElementById('pushResult');
+  if (!box) return;
+  box.style.display = 'block';
+  if (e) {
+    box.innerHTML = `<div class="alert bad" style="margin:0"><span>■</span><div>下发失败：<code>${esc(e.code)}</code> ${esc(e.message)}</div></div>`;
+    return;
+  }
+  box.innerHTML = `<div class="io-box">
+    <div class="h"><span>下发结果</span><span>${statusTag(d.state, DIST_STATE)}</span></div>
+    <div class="small">distribution_id：<span class="mono">${esc(d.distribution_id || '—')}</span></div>
+    <div class="small">stage：<span class="mono">${esc(d.stage || '—')}</span></div>
+    <div class="small">三态：${distThreeStateTags(d)}</div>
+    ${d.instance_id ? `<div class="small">instance_id：<span class="mono">${esc(d.instance_id)}</span>${d.listen_port ? ` · 端口 <span class="mono">${esc(d.listen_port)}</span>` : ''}</div>` : ''}
+    ${d.cert_serial ? `<div class="small">证书序列号：<span class="mono">${esc(d.cert_serial)}</span></div>` : ''}
+    ${d.error_message ? `<div class="small" style="color:#a8322c">${esc(d.error_category || '')} ${esc(d.error_message)}</div>` : ''}
+    <div class="small muted" style="margin-top:4px">已安装 / 已启动 / 可调用 独立记录，已下发 ≠ 可调用。</div>
+  </div>`;
+}
+async function pollPush(distId, start) {
+  try {
+    const d = await api('/api/distributions/' + encodeURIComponent(distId));
+    renderPushResult(d, null);
+    if (!TERMINAL_DIST.has(d.state) && Date.now() - start < 30000) {
+      pushPollTimer = setTimeout(() => pollPush(distId, start), 1500);
+    } else {
+      loadHosts();
+      loadOverview();
+    }
+  } catch (e) {
+    renderPushResult(null, e);
+  }
+}
+
+/* ---- 定时任务 ---- */
+async function loadTasks() {
+  loadingRow('taskRows', 7);
+  setText('tkCount', '加载中…');
+  try {
+    const d = await api('/api/tasks');
+    state.tasks = d.tasks || [];
+    state.missed = d.missed_count || {};
+    state.tasksLoaded = true;
+    setText('navTaskCnt', String(state.tasks.filter(t => t.state === 'enabled').length));
+    renderTasks();
+    renderOverview();
+    await loadTaskLastExecutions();
+    renderTasks();
+  } catch (e) {
+    state.tasksLoaded = false;
+    errorRow('taskRows', 7, e, 'loadTasks()');
+    setText('tkCount', '加载失败');
+  }
+}
+
+async function loadTaskLastExecutions() {
+  const jobs = state.tasks.map(t => api(`/api/tasks/${encodeURIComponent(t.task_id)}/executions`)
+    .then(d => { state.taskLast[t.task_id] = (d.executions || [])[0] || null; })
+    .catch(() => { /* 单个任务历史失败不影响列表 */ }));
+  await Promise.all(jobs);
+}
+
+function taskTriggerText(t) {
+  if (t.trigger_type === 'cron') return `cron ${t.cron_expr || '—'}`;
+  if (t.trigger_type === 'interval') {
+    const s = Number(t.interval_seconds || 0);
+    if (s % 86400 === 0) return `每 ${s / 86400} 天`;
+    if (s % 3600 === 0) return `每 ${s / 3600} 小时`;
+    if (s % 60 === 0) return `每 ${s / 60} 分钟`;
+    return `每 ${s} 秒`;
+  }
+  return t.trigger_type || '—';
+}
+
+function taskTargetInst(instId) {
+  return (state.instances || []).find(i => i.instance_id === instId) || null;
+}
+
+function renderTasks() {
+  const q = (document.getElementById('tkSearch') || {}).value || '';
+  const en = (document.getElementById('tkEnabled') || {}).value || '';
+  const res = (document.getElementById('tkResult') || {}).value || '';
+  const term = q.trim().toLowerCase();
+  const rows = state.tasks.filter(t => {
+    if (en === 'on' && t.state !== 'enabled') return false;
+    if (en === 'off' && t.state === 'enabled') return false;
+    if (res) {
+      const last = state.taskLast[t.task_id];
+      if (!last || last.status !== res) return false;
+    }
+    if (term) {
+      const inst = taskTargetInst(t.instance_id);
+      const hay = [t.name, t.task_id, t.instance_id, inst ? typeName(inst.type_id) : '',
+        t.plugin_id, t.capability_id, t.description].join(' ').toLowerCase();
+      if (!hay.includes(term)) return false;
+    }
+    return true;
+  });
+  if (!state.tasksLoaded) loadingRow('taskRows', 7, '任务数据加载中…');
+  else if (!rows.length) emptyRow('taskRows', 7, state.tasks.length ? '没有符合筛选条件的任务' : '暂无定时任务：点击右上角「新建任务」选择实例能力');
+  else {
+    setHTML('taskRows', rows.map(t => {
+      const last = state.taskLast[t.task_id];
+      const lastHtml = last
+        ? `<div>${statusTag(last.status, EXEC_STATUS)}</div><div class="small muted mono">${esc(fmtShort(last.started_at))} · ${esc(fmtDur(last.duration_ms))}</div>`
+        : '<span class="small muted">尚无执行</span>';
+      const inst = taskTargetInst(t.instance_id);
+      const reason = inst ? instanceUnavailable(inst) : (t.instance_id ? '实例未登记' : '');
+      const targetHtml = inst
+        ? `<span class="small">${esc(typeName(inst.type_id))}</span><div class="small muted mono">${esc(inst.instance_id)}</div>${reason ? `<div class="small" style="color:#a8322c">${esc(reason)}</div>` : (inst.enabled ? '<div class="small muted">可调度</div>' : '')}`
+        : `<span class="small">${esc(t.plugin_id || '—')}</span><div class="small muted mono">${esc(t.instance_id || '本机别名（旧任务）')}</div>${t.instance_id ? `<div class="small" style="color:#a8322c">${esc(reason)}</div>` : ''}`;
+      return `<tr>
+        <td><span class="pl-name" onclick="openTaskDetail('${arg(t.task_id)}')">${esc(t.name)}</span><span class="pl-id">${esc(t.task_id)}</span></td>
+        <td>${targetHtml}<div class="small muted mono">${esc(t.capability_id)}</div></td>
+        <td class="small">${esc(taskTriggerText(t))}<div class="small muted mono">${esc(t.timezone || '—')}</div></td>
+        <td class="small mono">${esc(fmtTime(t.next_run_at))}</td>
+        <td>${lastHtml}</td>
+        <td><label class="switch"><input type="checkbox" ${t.state === 'enabled' ? 'checked' : ''} onchange="toggleTask('${arg(t.task_id)}', this.checked)"><span></span></label><div class="small muted">${esc((TASK_STATE[t.state] || {}).label || t.state)}</div></td>
+        <td class="nowrap">
+          <button class="link" onclick="openTaskDetail('${arg(t.task_id)}')">详情</button>
+          <button class="link" onclick="openTaskDrawer('${arg(t.task_id)}')">编辑</button>
+        </td>
+      </tr>`;
+    }).join(''));
+  }
+  const missedTotal = Object.keys(state.missed || {}).reduce((a, k) => a + Number(state.missed[k] || 0), 0);
+  setText('tkCount', `共 ${rows.length} 个任务 · 近 7 天错过 ${missedTotal} 次（错过执行不补跑）`);
+  setText('navTaskCnt', String(state.tasks.filter(t => t.state === 'enabled').length));
+}
+
+async function toggleTask(id, on) {
+  try {
+    await api(`/api/tasks/${encodeURIComponent(id)}/${on ? 'enable' : 'pause'}`, { method: 'POST', body: {} });
+    await loadTasks();
+    if (currentTaskId === id) openTaskDetail(id);
+  } catch (e) { alertErr(e); }
+}
+
+async function openTaskDetail(id) {
+  currentTaskId = id;
+  go('task-detail');
+  const t = state.tasks.find(x => x.task_id === id);
+  if (t) renderTaskDetail(t, []);
+  loadingRow('tdHistory', 5, '执行记录加载中…');
+  try {
+    const d = await api('/api/tasks/' + encodeURIComponent(id));
+    const i = state.tasks.findIndex(x => x.task_id === id);
+    if (i >= 0) state.tasks[i] = d;
+    const h = await api(`/api/tasks/${encodeURIComponent(id)}/executions`);
+    renderTaskDetail(d, h.executions || []);
+    renderTasks();
+  } catch (e) {
+    setHTML('tdHistory', `<tr><td colspan="5" style="padding:20px;text-align:center;color:#a8322c">执行记录加载失败：<code>${esc(e.code)}</code> ${esc(e.message)} <button class="btn sm" onclick="openTaskDetail('${arg(id)}')">重试</button></td></tr>`);
+  }
+}
+
+function renderTaskDetail(t, executions) {
+  const inst = taskTargetInst(t.instance_id);
+  const target = inst ? `${typeName(inst.type_id)}（${inst.instance_id}）` : (t.instance_id || `${t.plugin_id || '—'}（本机别名）`);
+  setText('tdName', t.name);
+  setHTML('tdMeta', `${statusTag(t.state, TASK_STATE)} <span class="mono">${esc(t.task_id)}</span> <span class="muted">·</span> ${esc(target)} / <span class="mono">${esc(t.capability_id)}</span>`);
+  const btn = document.getElementById('tdToggleBtn');
+  if (btn) btn.textContent = t.state === 'enabled' ? '暂停任务' : '启用任务';
+  const reason = inst ? instanceUnavailable(inst) : (t.instance_id ? '实例未登记' : '');
+  setHTML('tdInfo', `<dl class="kv">
+    <dt>task_id</dt><dd class="mono">${esc(t.task_id)}</dd>
+    <dt>instance_id</dt><dd class="mono">${esc(t.instance_id || '—（旧任务按本机别名）')}</dd>
+    <dt>plugin_id</dt><dd class="mono">${esc(t.plugin_id || '—')} <span class="muted small">（实例类型别名）</span></dd>
+    <dt>capability_id</dt><dd class="mono">${esc(t.capability_id)}</dd>
+    <dt>目标可用性</dt><dd>${reason ? `<span class="tag bad" style="height:18px">不可用</span> <span class="small">${esc(reason)}</span>` : '<span class="tag ok" style="height:18px">可调度</span>'}</dd>
+    <dt>trigger_type</dt><dd class="mono">${esc(t.trigger_type)}</dd>
+    <dt>${t.trigger_type === 'interval' ? 'interval_seconds' : 'cron_expr'}</dt><dd class="mono">${esc(t.trigger_type === 'interval' ? t.interval_seconds : (t.cron_expr || '—'))}</dd>
+    <dt>timezone</dt><dd class="mono">${esc(t.timezone || '—')}</dd>
+    <dt>timeout_seconds</dt><dd class="mono">${esc(t.timeout_seconds)}</dd>
+    <dt>retries</dt><dd class="mono">${esc(t.retries)}</dd>
+    <dt>overlap_policy</dt><dd class="mono">${esc(t.overlap_policy || '—')}</dd>
+    <dt>state</dt><dd>${statusTag(t.state, TASK_STATE)}</dd>
+    <dt>next_run_at</dt><dd class="mono small">${esc(fmtTime(t.next_run_at))}</dd>
+    <dt>last_run_at</dt><dd class="mono small">${esc(fmtTime(t.last_run_at))}</dd>
+    <dt>created_by</dt><dd class="mono">${esc(t.created_by || '—')}</dd>
+    <dt>created_at</dt><dd class="mono small">${esc(fmtTime(t.created_at))}</dd>
+    <dt>updated_at</dt><dd class="mono small">${esc(fmtTime(t.updated_at))}</dd>
+  </dl>`);
+  setText('tdParams', jsonText(t.input));
+  setText('tdHistSub', `共 ${executions.length} 条`);
+
+  if (!executions.length) {
+    emptyRow('tdHistory', 5, '尚无执行记录');
+  } else {
+    setHTML('tdHistory', executions.map(e => `<tr>
+      <td class="small mono">${esc(fmtTime(e.started_at))}</td>
+      <td>${statusTag(e.status, EXEC_STATUS)}</td>
+      <td class="mono small">${esc(fmtDur(e.duration_ms))}</td>
+      <td class="small">${esc(e.error_category || '—')}<div class="muted mono" style="font-size:10.5px">${esc(summaryText(e.output_summary))}</div></td>
+      <td><button class="link" onclick="showTaskRecord('${arg(t.task_id)}')">查看记录 →</button></td>
+    </tr>`).join(''));
+  }
+}
+
+async function runTaskNow() {
+  if (!currentTaskId) return;
+  try {
+    const r = await api(`/api/tasks/${encodeURIComponent(currentTaskId)}/run`, { method: 'POST', body: {} });
+    alert(`已触发执行：${r.status || '—'}\ninvocation_id：${r.invocation_id || '—'}\n耗时：${fmtDur(r.duration_ms)}` +
+      (r.error ? `\n错误：${r.error.code || ''} ${r.error.message || ''}` : ''));
+  } catch (e) {
+    alertErr(e);
+  }
+  await loadTasks();
+  await openTaskDetail(currentTaskId);
+  loadExecutions();
+  loadOverview();
+}
+async function toggleTaskFromDetail() {
+  const t = state.tasks.find(x => x.task_id === currentTaskId);
+  if (!t) return;
+  await toggleTask(currentTaskId, t.state !== 'enabled');
+}
+async function deleteTask() {
+  if (!currentTaskId) return;
+  const t = state.tasks.find(x => x.task_id === currentTaskId);
+  if (!t || !confirm(`确定删除任务「${t.name}」？`)) return;
+  try {
+    await api('/api/tasks/' + encodeURIComponent(currentTaskId), { method: 'DELETE' });
+    currentTaskId = '';
+    go('tasks');
+    await loadTasks();
+  } catch (e) { alertErr(e); }
+}
+function showTaskRecord(id) {
+  switchRecTab('exec');
+  const s = document.getElementById('rcSearch');
+  if (s) s.value = id;
+  const r = document.getElementById('rcRange');
+  if (r) r.value = '0';
+  go('records');
+  loadExecutions();
+  switchRecTab('exec');
+}
+
+/* ---- 任务抽屉 ---- */
+async function openTaskDrawer(id) {
+  if (!state.typesLoaded) await loadPluginTypes();
+  if (!state.instancesLoaded) await loadInstances();
+  editingTaskId = id || '';
+  const t = id ? state.tasks.find(x => x.task_id === id) : null;
+  setText('taskDrawerTitle', t ? '编辑任务' : '新建定时任务');
+  const sel = document.getElementById('tfInstance');
+  const opts = (state.instances || []).map(inst => {
+    const why = instanceUnavailable(inst);
+    return `<option value="${arg(inst.instance_id)}">${esc(typeName(inst.type_id))}（${esc(inst.instance_id)}）${why ? ' · 不可用：' + esc(why) : ''}</option>`;
+  });
+  if (!opts.length) opts.push('<option value="">（暂无实例：先在插件管理扫描插件包）</option>');
+  sel.innerHTML = opts.join('');
+  let target = t ? (t.instance_id || '') : '';
+  if (t && !t.instance_id && t.plugin_id) {
+    // 旧任务只有 plugin_id：优先映射到同名本机实例，否则保留旧口径选项
+    const aliasId = 'local:' + t.plugin_id;
+    if (state.instances.some(i => i.instance_id === aliasId)) {
+      target = aliasId;
+    } else {
+      target = 'plugin:' + t.plugin_id;
+      sel.insertAdjacentHTML('afterbegin', `<option value="${arg(target)}">${esc(t.plugin_id)}（本机别名 · 旧任务兼容）</option>`);
+    }
+  } else if (t && t.instance_id && !state.instances.some(i => i.instance_id === t.instance_id)) {
+    sel.insertAdjacentHTML('afterbegin', `<option value="${arg(t.instance_id)}">${esc(t.instance_id)}（实例未登记）</option>`);
+  }
+  if (target) sel.value = target;
+  else if (state.instances.length) {
+    const firstOk = state.instances.find(i => !instanceUnavailable(i)) || state.instances[0];
+    sel.value = firstOk.instance_id;
+  }
+  renderTaskCaps(sel.value, t ? t.capability_id : '');
+  const f = (n) => document.getElementById(n);
+  f('tfName').value = t ? t.name : '';
+  f('tfDesc').value = t ? (t.description || '') : '';
+  const mode = t ? t.trigger_type : 'cron';
+  $$('input[name="tfMode"]').forEach(el => { el.checked = el.value === mode; });
+  f('tfCron').value = t && t.cron_expr ? t.cron_expr : '*/30 9-18 * * 1-5';
+  const secs = t && t.interval_seconds ? Number(t.interval_seconds) : 3600;
+  if (secs % 86400 === 0) { f('tfEvery').value = secs / 86400; f('tfUnit').value = '86400'; }
+  else if (secs % 3600 === 0) { f('tfEvery').value = secs / 3600; f('tfUnit').value = '3600'; }
+  else { f('tfEvery').value = Math.max(1, Math.round(secs / 60)); f('tfUnit').value = '60'; }
+  f('tfTimezone').value = t ? (t.timezone || 'Asia/Shanghai') : 'Asia/Shanghai';
+  f('tfTimeout').value = t ? t.timeout_seconds : 300;
+  f('tfRetry').value = t ? t.retries : 0;
+  f('tfOverlap').value = 'skip';
+  f('tfParams').value = jsonText(t ? t.input : {});
+  if (f('tfParams').value === '未记录') f('tfParams').value = '{}';
+  renderTaskMode();
+  const drawer = document.getElementById('taskDrawer');
+  const mask = document.getElementById('taskDrawerMask');
+  if (drawer) drawer.classList.add('open');
+  if (mask) mask.classList.add('open');
+}
+function closeTaskDrawer() {
+  const d = document.getElementById('taskDrawer');
+  const m = document.getElementById('taskDrawerMask');
+  if (d) d.classList.remove('open');
+  if (m) m.classList.remove('open');
+  editingTaskId = '';
+}
+function renderTaskCaps(instanceValue, selected) {
+  let caps = [];
+  let hint = '';
+  if (String(instanceValue).startsWith('plugin:')) {
+    const pid = String(instanceValue).slice('plugin:'.length);
+    const p = (state.plugins || []).find(x => x.plugin_id === pid);
+    caps = (p && p.capabilities) || [];
+    hint = p ? '旧任务口径：能力按本机注册表解析' : '该插件当前不在本机注册表';
+  } else {
+    const inst = taskTargetInst(instanceValue);
+    const t = inst ? typeOf(inst.type_id) : null;
+    caps = ((t && t.capabilities) || []).map(c => c.capability_id);
+    const why = inst ? instanceUnavailable(inst) : '实例未登记';
+    hint = caps.length
+      ? `${caps.length} 项能力可选${why ? '；目标当前不可用：' + why : ''}`
+      : '实例未登记或该类型未声明能力';
+  }
+  const sel = document.getElementById('tfCap');
+  sel.innerHTML = caps.length
+    ? caps.map(c => `<option value="${arg(c)}">${esc(c)}</option>`).join('')
+    : '<option value="">（该目标未声明能力）</option>';
+  if (selected && !caps.includes(selected)) {
+    sel.insertAdjacentHTML('afterbegin', `<option value="${arg(selected)}">${esc(selected)}（不在能力清单）</option>`);
+  }
+  if (selected) sel.value = selected;
+  setText('tfCapHint', hint);
+}
+function currentTaskTrigger() {
+  const el = $$('input[name="tfMode"]').find(x => x.checked);
+  return el ? el.value : 'cron';
+}
+function renderTaskMode() {
+  const mode = currentTaskTrigger();
+  const c = document.getElementById('tfCronBlock');
+  const i = document.getElementById('tfIntervalBlock');
+  if (c) c.style.display = mode === 'cron' ? '' : 'none';
+  if (i) i.style.display = mode === 'interval' ? '' : 'none';
+}
+async function saveTask() {
+  const name = (document.getElementById('tfName') || {}).value.trim();
+  const target = (document.getElementById('tfInstance') || {}).value;
+  const cap = (document.getElementById('tfCap') || {}).value;
+  if (!name) { alert('任务名称必填'); return; }
+  if (!target || !cap) { alert('请选择目标实例与能力'); return; }
+  let targetBody;
+  if (String(target).startsWith('plugin:')) {
+    targetBody = { plugin_id: String(target).slice('plugin:'.length) };
+  } else {
+    const inst = taskTargetInst(target);
+    const why = inst ? instanceUnavailable(inst) : '实例未登记';
+    if (why && !confirm(`目标实例当前不可用（${why}）。任务可以保存，但调度执行可能失败。仍要保存？`)) return;
+    targetBody = { instance_id: target };
+  }
+  const mode = currentTaskTrigger();
+  let cron = '';
+  let interval = 0;
+  if (mode === 'cron') {
+    cron = (document.getElementById('tfCron') || {}).value.trim();
+    if (!cron) { alert('cron 表达式必填'); return; }
+  } else {
+    const n = Number((document.getElementById('tfEvery') || {}).value);
+    const unit = Number((document.getElementById('tfUnit') || {}).value);
+    if (!Number.isInteger(n) || n < 1) { alert('间隔必须是正整数'); return; }
+    interval = n * unit;
+  }
+  if (interval > 2147483647) { alert('间隔过大'); return; }
+  let input;
+  try { input = JSON.parse((document.getElementById('tfParams') || {}).value || '{}'); }
+  catch (e) { alert('参数不是合法 JSON：' + e.message); return; }
+  if (!input || typeof input !== 'object' || Array.isArray(input)) { alert('参数必须是 JSON 对象'); return; }
+  const body = {
+    name,
+    description: (document.getElementById('tfDesc') || {}).value,
+    ...targetBody,
+    capability_id: cap,
+    input,
+    trigger_type: mode,
+    cron_expr: cron,
+    interval_seconds: interval,
+    timezone: (document.getElementById('tfTimezone') || {}).value.trim() || 'Asia/Shanghai',
+    timeout_seconds: Number((document.getElementById('tfTimeout') || {}).value),
+    retries: Number((document.getElementById('tfRetry') || {}).value)
+  };
+  try {
+    if (editingTaskId) await api('/api/tasks/' + encodeURIComponent(editingTaskId), { method: 'PUT', body });
+    else await api('/api/tasks', { method: 'POST', body });
+    const id = editingTaskId;
+    closeTaskDrawer();
+    await loadTasks();
+    loadOverview();
+    if (id && currentTaskId === id) openTaskDetail(id);
+  } catch (e) { alertErr(e); }
+}
+
+/* ---- 执行记录 / 审计 ---- */
+async function loadExecutions() {
+  loadingRow('recordRows', 9, '执行记录加载中…');
+  try {
+    const p = new URLSearchParams();
+    const plugin = (document.getElementById('rcPlugin') || {}).value || '';
+    const status = (document.getElementById('rcResult') || {}).value || '';
+    const source = (document.getElementById('rcTrigger') || {}).value || '';
+    const hours = (document.getElementById('rcRange') || {}).value || '24';
+    if (plugin) p.set('plugin_id', plugin);
+    if (status) p.set('status', status);
+    if (source) p.set('source', source);
+    if (hours !== '0') {
+      const from = new Date(Date.now() - Number(hours) * 3600 * 1000);
+      p.set('from', from.toISOString());
+    }
+    p.set('limit', '200');
+    const d = await api('/api/executions?' + p.toString());
+    state.executions = d.executions || [];
+    renderRecords();
+  } catch (e) {
+    errorRow('recordRows', 9, e, 'loadExecutions()');
+    setText('rcCount', '加载失败');
+  }
+}
+
+function renderRecords() {
+  const q = ((document.getElementById('rcSearch') || {}).value || '').trim().toLowerCase();
+  const rows = state.executions.filter(r => {
+    if (!q) return true;
+    return [r.subject, r.plugin_id, r.capability_id, r.task_id, r.invocation_id]
+      .join(' ').toLowerCase().includes(q);
+  });
+  recordRowsData = rows;
+  if (!rows.length) { emptyRow('recordRows', 9, '没有符合条件的执行记录'); setText('rcCount', '共 0 条'); return; }
+  setHTML('recordRows', rows.map((r, i) => {
+    const st = EXEC_STATUS[r.status] || { label: r.status || '—', cls: 'gray' };
+    return `<tr class="expandable" onclick="toggleRec(${i})">
+      <td class="small mono">${esc(fmtTime(r.started_at))}</td>
+      <td><span class="tag gray" style="height:18px">${esc(SOURCE_LABEL[r.source] || r.source || '—')}</span></td>
+      <td class="small">${esc(r.subject || '—')}</td>
+      <td><span class="tag ${st.cls}" style="height:18px"><span class="d"></span>${esc(st.label)}</span></td>
+      <td><span class="small">${esc(r.plugin_id)}</span><div class="small muted mono">${esc(r.capability_id)}</div></td>
+      <td class="small mono">${r.task_id ? `<a href="#" onclick="event.stopPropagation();openTaskDetail('${arg(r.task_id)}');return false">${esc(r.task_id)}</a>` : '—'}</td>
+      <td class="num mono small">${esc(fmtDur(r.duration_ms))}</td>
+      <td class="small">${esc(r.error_category || '—')}</td>
+      <td class="small muted">${esc(summaryText(r.output_summary))}</td>
+    </tr>
+    <tr id="rec-d-${i}" style="display:none">
+      <td colspan="9" style="background:#fbfcfd">
+        <div class="small" style="margin-bottom:6px">
+          invocation_id：<span class="mono">${esc(r.invocation_id)}</span>
+          · 开始：<span class="mono">${esc(fmtTime(r.started_at))}</span>
+          · 结束：<span class="mono">${esc(fmtTime(r.finished_at))}</span>
+        </div>
+        <div class="grid g-2" style="gap:10px">
+          <div class="io-box"><div class="h"><span>输入摘要</span><span>summary</span></div><pre>${esc(summaryText(r.input_summary))}</pre></div>
+          <div class="io-box"><div class="h"><span>输出摘要</span><span>summary</span></div><pre>${esc(summaryText(r.output_summary))}</pre></div>
+        </div>
+      </td>
+    </tr>`;
+  }).join(''));
+  setText('rcCount', `共 ${rows.length} 条`);
+}
+function toggleRec(i) {
+  const el = document.getElementById('rec-d-' + i);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+function switchRecTab(tab) {
+  state.recTab = tab;
+  $$('#recTabs .tab').forEach(el => el.classList.toggle('active', el.dataset.rtab === tab));
+  const exec = document.getElementById('recExecPane');
+  const audit = document.getElementById('recAuditPane');
+  if (exec) exec.style.display = tab === 'exec' ? '' : 'none';
+  if (audit) audit.style.display = tab === 'audit' ? '' : 'none';
+  if (tab === 'audit') {
+    const denied = !isAdmin();
+    const dEl = document.getElementById('auDenied');
+    const bEl = document.getElementById('auBody');
+    if (dEl) dEl.style.display = denied ? '' : 'none';
+    if (bEl) bEl.style.display = denied ? 'none' : '';
+    if (!denied) loadAudit();
+  }
+}
+
+async function loadAudit() {
+  if (!isAdmin()) {
+    const dEl = document.getElementById('auDenied');
+    const bEl = document.getElementById('auBody');
+    if (dEl) dEl.style.display = '';
+    if (bEl) bEl.style.display = 'none';
+    return;
+  }
+  loadingRow('auditRows', 7, '审计日志加载中…');
+  setText('auCount', '加载中…');
+  const p = new URLSearchParams();
+  const action = ((document.getElementById('auAction') || {}).value || '').trim();
+  const result = (document.getElementById('auResult') || {}).value || '';
+  const limit = (document.getElementById('auLimit') || {}).value || '100';
+  if (action) p.set('action', action);
+  if (result) p.set('result', result);
+  p.set('limit', limit);
+  try {
+    const d = await api('/api/audit-events?' + p.toString());
+    state.audit = d.audit_events || [];
+    state.auditLoaded = true;
+    if (!state.audit.length) emptyRow('auditRows', 7, '暂无审计事件');
+    else {
+      setHTML('auditRows', state.audit.map(e => `<tr>
+        <td class="small mono">${esc(fmtTime(e.occurred_at))}</td>
+        <td class="small">${esc(e.subject || '—')}</td>
+        <td class="mono small">${esc(e.action || '—')}</td>
+        <td class="small">${esc(e.target_type || '—')}<div class="mono muted" style="font-size:10.5px">${esc(e.target_id || '')}</div></td>
+        <td>${statusTag(e.result, AUDIT_RESULT)}</td>
+        <td class="small">${esc(e.reason || '—')}</td>
+        <td class="small mono" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(jsonText(e.details))}">${esc(summaryText(e.details))}</td>
+      </tr>`).join(''));
+    }
+    setText('auCount', `共 ${state.audit.length} 条`);
+  } catch (e) {
+    if (e.status === 403) {
+      const dEl = document.getElementById('auDenied');
+      const bEl = document.getElementById('auBody');
+      if (dEl) dEl.style.display = '';
+      if (bEl) bEl.style.display = 'none';
+      setText('auCount', '—');
+    } else {
+      errorRow('auditRows', 7, e, 'loadAudit()');
+      setText('auCount', '加载失败');
+    }
+  }
+}
+
+/* ---- 凭据 / 设置 ---- */
+function renderCreds() { /* 凭据随主机保存，无独立列表接口 */ }
+function renderSettings() { /* 系统设置接口未开放（待定） */ }
+
+/* ---- 初始化 ---- */
+function bindEvents() {
+  const loginForm = document.getElementById('loginForm');
+  if (loginForm) loginForm.addEventListener('submit', doLogin);
+  const logout = document.getElementById('logoutBtn');
+  if (logout) logout.addEventListener('click', doLogout);
+
+  $$('.nav-item').forEach(n => n.addEventListener('click', () => go(n.dataset.page)));
+
+  const on = (id, ev, fn) => { const el = document.getElementById(id); if (el) el.addEventListener(ev, fn); };
+  on('typeSearch', 'input', renderTypeRows);
+  on('instSearch', 'input', renderInstanceRows);
+  on('instType', 'change', renderInstanceRows);
+  on('instHost', 'change', renderInstanceRows);
+  on('instState', 'change', renderInstanceRows);
+
+  on('hsSearch', 'input', renderHosts);
+  on('hsAuth', 'change', renderHosts);
+  on('hsConn', 'change', renderHosts);
+
+  on('tkSearch', 'input', renderTasks);
+  on('tkEnabled', 'change', renderTasks);
+  on('tkResult', 'change', renderTasks);
+
+  ['rcPlugin', 'rcResult', 'rcTrigger', 'rcRange'].forEach(id => on(id, 'change', loadExecutions));
+  on('rcSearch', 'input', renderRecords);
+  on('auAction', 'change', loadAudit);
+  on('auResult', 'change', loadAudit);
+  on('auLimit', 'change', loadAudit);
+
+  on('tfInstance', 'change', () => renderTaskCaps((document.getElementById('tfInstance') || {}).value, ''));
+  $$('input[name="tfMode"]').forEach(el => el.addEventListener('change', renderTaskMode));
+
+  $$('input[name="hAuth"]').forEach(el => el.addEventListener('change', renderAuthBlock));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  bindEvents();
+  bootstrap();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "demo-echo.fail 输出",
+  "description": "该能力总是失败，不会返回 ok 输出；保留 schema 以满足清单必填字段。",
+  "type": "object",
+  "properties": {
+    "never": { "type": "boolean" }
+  }
+}

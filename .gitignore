@@ -1,0 +1,18 @@
+# 构建产物
+/bin/
+/examples/**/bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 运行时数据
+*.db
+*.db-wal
+*.db-shm
+/backups/
+*.sock
+
+# 生成/临时目录
+/.screenshots/
+/.trae-html-share-packages/

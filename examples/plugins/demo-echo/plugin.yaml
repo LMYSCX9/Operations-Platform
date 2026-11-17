@@ -1,0 +1,38 @@
+identity:
+  id: demo-echo
+  display_name: 示例回显插件
+  description: M1 示例插件，提供回显与可控失败两个能力，用于验证发现、启用与调用链路
+version:
+  plugin: 1.0.0
+  contract: ">=1.0 <2.0"
+form: command
+entry:
+  executable: bin/demo-echo
+capabilities:
+  - id: demo-echo.echo
+    description: 原样回显输入文本
+    input_schema_ref: schemas/echo-input.json
+    output_schema_ref: schemas/echo-output.json
+    idempotent: true
+    long_running: false
+    supports_cancel: false
+    concurrency: parallel
+    sensitive: false
+  - id: demo-echo.fail
+    description: 按输入指定错误类别失败，用于验证错误与退出码映射
+    input_schema_ref: schemas/fail-input.json
+    output_schema_ref: schemas/fail-output.json
+    idempotent: false
+    long_running: false
+    supports_cancel: false
+    concurrency: serial
+    sensitive: false
+permissions:
+  - category: data_dir
+    actions:
+      - read
+      - write
+metadata:
+  author: ops-platform
+  license: Apache-2.0
+  docs: examples/plugins/demo-echo
